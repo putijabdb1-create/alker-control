@@ -125,25 +125,38 @@ function buildNav(){
   if(first) first.classList.add("active");
 }
 async function route(name){
+  const page=$("page");
+  if(!page){
+    console.error("Elemen #page tidak ditemukan.");
+    return;
+  }
+
+  page.innerHTML=`<div class="card"><strong>Memuat halaman...</strong><p class="muted">${esc(name)}</p></div>`;
+
   try{
-    if(name==="dashboard") return renderDashboard();
-    if(name==="myinventory") return renderMyInventory();
-    if(name==="initialReport") return renderInitialReport();
-    if(name==="requests") return renderRequests();
-    if(name==="issues") return renderIssues();
-    if(name==="returns") return renderReturns();
-    if(name==="team") return renderTeam();
-    if(name==="teamrequests") return renderTeamRequests();
-    if(name==="teaminventory") return renderTeamInventory();
-    if(name==="warehouse") return renderWarehouse();
-    if(name==="initial") return renderInitial();
-    if(name==="receiving") return renderReceiving();
-    if(name==="distribution") return renderDistribution();
-    if(name==="procurement") return renderProcurement();
-    if(name==="allinventory") return renderAllInventory();
-    if(name==="master") return renderMaster();
-    if(name==="audit") return renderAudit();
-  }catch(e){$("page").innerHTML=`<div class="card"><strong>Gagal memuat halaman</strong><p class="danger-text">${esc(e.message)}</p></div>`}
+    if(name==="dashboard") return await renderDashboard();
+    if(name==="myinventory") return await renderMyInventory();
+    if(name==="initialReport") return await renderInitialReport();
+    if(name==="requests") return await renderRequests();
+    if(name==="issues") return await renderIssues();
+    if(name==="returns") return await renderReturns();
+    if(name==="team") return await renderTeam();
+    if(name==="teamrequests") return await renderTeamRequests();
+    if(name==="teaminventory") return await renderTeamInventory();
+    if(name==="warehouse") return await renderWarehouse();
+    if(name==="initial") return await renderInitial();
+    if(name==="receiving") return await renderReceiving();
+    if(name==="distribution") return await renderDistribution();
+    if(name==="procurement") return await renderProcurement();
+    if(name==="allinventory") return await renderAllInventory();
+    if(name==="master") return await renderMaster();
+    if(name==="audit") return await renderAudit();
+
+    page.innerHTML=`<div class="card"><strong>Menu belum tersedia</strong><p class="muted">Route: ${esc(name)}</p></div>`;
+  }catch(e){
+    console.error("ROUTE ERROR:",name,e);
+    page.innerHTML=`<div class="card"><strong>Gagal memuat halaman</strong><p class="danger-text">${esc(e.message||e)}</p><button class="btn secondary" onclick="route('${esc(name)}')">Coba Lagi</button></div>`;
+  }
 }
 
 async function dashboardData(){return api("dashboard")}
