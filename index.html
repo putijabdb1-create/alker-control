@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>ALKER CONTROL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <section id="loginView" class="login-shell">
+    <div class="login-card">
+      <div class="brand-mark">A</div>
+      <div class="eyebrow">ASSET • INVENTORY • RESPONSIBILITY</div>
+      <h1>ALKER CONTROL</h1>
+      <p class="muted">Monitoring ALKER/SALKER, gudang, distribusi dan tanggung jawab teknisi.</p>
+      <form id="loginForm">
+        <label>Username<input id="username" autocomplete="username" required></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary full" type="submit">Masuk</button>
+      </form>
+      <div id="loginMsg" class="form-msg"></div>
+    </div>
+  </section>
+
+  <section id="mainView" class="hidden">
+    <header class="topbar">
+      <button id="mobileMenu" class="icon-btn">☰</button>
+      <div class="top-brand"><span class="brand-dot">A</span><strong>ALKER CONTROL</strong></div>
+      <div class="top-user">
+        <span id="topUser"></span>
+        <button id="logoutBtn" class="btn ghost">Keluar</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside id="sidebar" class="sidebar">
+        <div class="profile-box">
+          <div id="avatar" class="avatar">U</div>
+          <div><strong id="sideName">User</strong><small id="sideRole">ROLE</small><small id="sideLoker">LOKER</small></div>
+        </div>
+        <nav id="nav"></nav>
+      </aside>
+
+      <main class="content">
+        <div id="page"></div>
+      </main>
+    </div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="modalTitle"></h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
