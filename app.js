@@ -588,11 +588,23 @@ function buildNav() {
       items: [
 
         [
-          "master",
-          "⚙",
-          "Master Data"
-        ],
+		"master",
+		"⚙",
+		"Master ALKER"
+		],
 
+		[
+		"users",
+		"♙",
+		"Master User"
+		],
+		
+		[
+		"users",
+		"♙",
+		"Teknisi"
+		],
+		
         [
           "teammanage",
           "♙",
@@ -775,7 +787,10 @@ async function route(name) {
 
     if (name === "master")
       return renderMaster();
-
+  
+	if(name === "users")
+		return renderUsers();
+	
     if (name === "audit")
       return renderAudit();
 
@@ -5734,7 +5749,488 @@ window.showMasterForm =
       };
   };
 
+/*************************************************
+ * MASTER USER
+ * CHECKPOINT 3.3A
+ *************************************************/
 
+async function renderUsers(){
+
+  const r =
+    await api("users");
+
+  const users =
+    r.data || [];
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          ${
+            session.role === "LEADER"
+              ? "Teknisi Loker"
+              : "Master User"
+          }
+        </h2>
+
+        <p class="muted">
+          ${
+            session.role === "LEADER"
+              ? "Kelola user teknisi pada loker Anda."
+              : "Kelola akun, role, dan loker pengguna sistem."
+          }
+        </p>
+
+      </div>
+
+      <button
+        class="btn primary"
+        onclick="showUserForm()"
+      >
+        + Tambah User
+      </button>
+
+    </div>
+
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total User",
+        users.length,
+        "akun"
+      )}
+
+      ${metric(
+        "Teknisi",
+        users.filter(
+          x => x.role === "TEKNISI"
+        ).length,
+        "orang"
+      )}
+
+      ${metric(
+        "Aktif",
+        users.filter(
+          x => x.active === "Y"
+        ).length,
+        "akun"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+              <th>Nama</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Loker</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            ${
+              users.map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      <strong>
+                        ${esc(x.name)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${esc(x.username)}
+                    </td>
+
+                    <td>
+                      ${badge(x.role)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker || "-")}
+                    </td>
+
+                    <td>
+                      ${
+                        x.active === "Y"
+                          ? badge("AKTIF")
+                          : badge("NONAKTIF")
+                      }
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn secondary"
+                        onclick='showUserForm(
+                          ${JSON.stringify(x)}
+                        )'
+                      >
+                        Edit
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
+              ).join("") ||
+
+              `
+                <tr>
+                  <td colspan="6">
+                    <div class="empty">
+                      Belum ada user.
+                    </div>
+                  </td>
+                </tr>
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+window.showUserForm = function(user = {}){
+
+  const isEdit =
+    Boolean(user.userId);
+
+  const isLeader =
+    session.role === "LEADER";
+
+
+  openModal(
+
+    isEdit
+      ? "Edit User"
+      : "Tambah User",
+
+    `
+
+      <form id="userForm">
+
+        <div class="form-grid">
+
+          <label>
+            Nama Lengkap
+
+            <input
+              name="name"
+              value="${esc(user.name || "")}"
+              required
+            >
+          </label>
+
+
+          <label>
+            Username
+
+            <input
+              name="username"
+              value="${esc(user.username || "")}"
+              required
+            >
+          </label>
+
+
+          <label>
+            Password
+            ${
+              isEdit
+                ? "<small class='muted'>Kosongkan jika tidak ingin mengganti.</small>"
+                : ""
+            }
+
+            <input
+              name="password"
+              type="password"
+              ${isEdit ? "" : "required"}
+            >
+          </label>
+
+
+          <label>
+            Role
+
+            ${
+              isLeader
+
+                ? `
+                  <input
+                    value="TEKNISI"
+                    readonly
+                  >
+
+                  <input
+                    type="hidden"
+                    name="role"
+                    value="TEKNISI"
+                  >
+                `
+
+                : `
+                  <select name="role" required>
+
+                    <option value="">
+                      Pilih Role
+                    </option>
+
+                    <option value="TEKNISI"
+                      ${
+                        user.role === "TEKNISI"
+                          ? "selected"
+                          : ""
+                      }>
+                      TEKNISI
+                    </option>
+
+                    <option value="LEADER"
+                      ${
+                        user.role === "LEADER"
+                          ? "selected"
+                          : ""
+                      }>
+                      LEADER
+                    </option>
+
+                    <option value="SPV_GUDANG"
+                      ${
+                        user.role === "SPV_GUDANG"
+                          ? "selected"
+                          : ""
+                      }>
+                      SPV GUDANG
+                    </option>
+
+                    <option value="ADMIN"
+                      ${
+                        user.role === "ADMIN"
+                          ? "selected"
+                          : ""
+                      }>
+                      ADMIN
+                    </option>
+
+                  </select>
+                `
+            }
+
+          </label>
+
+
+          <label>
+            Loker
+
+            ${
+              isLeader
+
+                ? `
+                  <input
+                    value="${esc(session.loker)}"
+                    readonly
+                  >
+
+                  <input
+                    type="hidden"
+                    name="loker"
+                    value="${esc(session.loker)}"
+                  >
+                `
+
+                : `
+                  <select
+                    name="loker"
+                    id="userLoker"
+                    required
+                  >
+
+                    <option value="">
+                      Pilih Loker
+                    </option>
+
+                    <option value="IOAN / ASSURANCE">
+                      IOAN / ASSURANCE
+                    </option>
+
+                    <option value="PSB / FULFILLMENT">
+                      PSB / FULFILLMENT
+                    </option>
+
+                    <option value="MAINTENANCE / OSP">
+                      MAINTENANCE / OSP
+                    </option>
+
+                    <option value="LEADER">
+                      LEADER
+                    </option>
+
+                    <option value="GUDANG">
+                      GUDANG
+                    </option>
+
+                    <option value="ADMIN">
+                      ADMIN
+                    </option>
+
+                  </select>
+                `
+            }
+
+          </label>
+
+
+          <label>
+            Status
+
+            <select name="active">
+
+              <option
+                value="Y"
+                ${
+                  user.active !== "N"
+                    ? "selected"
+                    : ""
+                }
+              >
+                AKTIF
+              </option>
+
+              <option
+                value="N"
+                ${
+                  user.active === "N"
+                    ? "selected"
+                    : ""
+                }
+              >
+                NONAKTIF
+              </option>
+
+            </select>
+
+          </label>
+
+        </div>
+
+
+        <div
+          class="actions"
+          style="margin-top:15px"
+        >
+
+          <button
+            type="button"
+            class="btn secondary"
+            onclick="closeModal()"
+          >
+            Batal
+          </button>
+
+          <button
+            type="submit"
+            class="btn primary"
+          >
+            Simpan User
+          </button>
+
+        </div>
+
+      </form>
+
+    `
+  );
+
+
+  $("userForm").onsubmit =
+    async e => {
+
+      e.preventDefault();
+
+      const f =
+        e.target;
+
+      try{
+
+        await api(
+          "saveUser",
+          {
+
+            userId:
+              user.userId || "",
+
+            name:
+              f.name.value,
+
+            username:
+              f.username.value,
+
+            password:
+              f.password.value,
+
+            role:
+              f.role.value,
+
+            loker:
+              f.loker.value,
+
+            active:
+              f.active.value
+
+          }
+        );
+
+
+        closeModal();
+
+        toast(
+          isEdit
+            ? "User berhasil diperbarui."
+            : "User berhasil dibuat."
+        );
+
+
+        await renderUsers();
+
+
+      }catch(err){
+
+        toast(
+          err.message
+        );
+
+      }
+
+    };
+
+};
 /*************************************************
  * AUDIT
  *************************************************/
