@@ -3,34 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="ALKER CONTROL — Asset, Inventory & Responsibility">
   <title>ALKER CONTROL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="app">
+
+  <!-- LOGIN -->
   <section id="loginView" class="login-shell">
+    <div class="login-bg-orb orb-one"></div>
+    <div class="login-bg-orb orb-two"></div>
+
     <div class="login-card">
-      <div class="brand-mark">A</div>
-      <div class="eyebrow">ASSET • INVENTORY • RESPONSIBILITY</div>
-      <h1>ALKER CONTROL</h1>
-      <p class="muted">Monitoring ALKER/SALKER, gudang, distribusi dan tanggung jawab teknisi.</p>
-      <form id="loginForm">
-        <label>Username<input id="username" autocomplete="username" required></label>
-        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-        <button class="btn primary full" type="submit">Masuk</button>
+      <div class="login-brand">
+        <div class="brand-mark">A</div>
+        <div>
+          <div class="eyebrow">ASSET • INVENTORY • RESPONSIBILITY</div>
+          <div class="brand-name">ALKER CONTROL</div>
+        </div>
+      </div>
+
+      <div class="login-copy">
+        <h1>Kontrol ALKER lebih rapi.</h1>
+        <p>Kelola alat kerja, stok gudang, distribusi, laporan teknisi, dan tanggung jawab aset dalam satu sistem.</p>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <label>
+          Username
+          <div class="input-wrap">
+            <span>◉</span>
+            <input id="username" autocomplete="username" placeholder="Masukkan username" required>
+          </div>
+        </label>
+
+        <label>
+          Password
+          <div class="input-wrap">
+            <span>●</span>
+            <input id="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required>
+          </div>
+        </label>
+
+        <button class="btn primary full login-btn" type="submit">
+          <span>Masuk ke Sistem</span><span>→</span>
+        </button>
       </form>
+
       <div id="loginMsg" class="form-msg"></div>
+      <div class="login-footer">
+        <span>ALKER CONTROL</span>
+        <span>Secure • Responsive • Centralized</span>
+      </div>
     </div>
   </section>
 
+  <!-- MAIN APP -->
   <section id="mainView" class="hidden">
     <header class="topbar">
-      <button id="mobileMenu" class="icon-btn">☰</button>
-      <div class="top-brand"><span class="brand-dot">A</span><strong>ALKER CONTROL</strong></div>
+      <div class="top-left">
+        <button id="mobileMenu" class="icon-btn menu-btn" aria-label="Menu">☰</button>
+        <div class="top-brand">
+          <span class="brand-dot">A</span>
+          <div>
+            <strong>ALKER CONTROL</strong>
+            <small>Asset & Inventory Management</small>
+          </div>
+        </div>
+      </div>
+
       <div class="top-user">
-        <span id="topUser"></span>
-        <button id="logoutBtn" class="btn ghost">Keluar</button>
+        <div class="top-user-meta">
+          <strong id="topUser">User</strong>
+          <span id="topUserRole">ALKER CONTROL</span>
+        </div>
+        <div id="topUserAvatar" class="top-avatar">U</div>
+        <button id="logoutBtn" class="btn ghost logout-btn">Keluar</button>
       </div>
     </header>
 
@@ -38,26 +91,47 @@
       <aside id="sidebar" class="sidebar">
         <div class="profile-box">
           <div id="avatar" class="avatar">U</div>
-          <div><strong id="sideName">User</strong><small id="sideRole">ROLE</small><small id="sideLoker">LOKER</small></div>
+          <div class="profile-copy">
+            <strong id="sideName">User</strong>
+            <small id="sideRole">ROLE</small>
+            <small id="sideLoker">LOKER</small>
+          </div>
         </div>
+
+        <div class="sidebar-caption">NAVIGASI</div>
         <nav id="nav"></nav>
+
+        <div class="sidebar-bottom">
+          <div class="system-status"><span></span> Sistem aktif</div>
+          <div class="sidebar-version">ALKER CONTROL • v1.0</div>
+        </div>
       </aside>
 
       <main class="content">
-        <div id="page"></div>
+        <div class="content-inner">
+          <div id="page"></div>
+        </div>
       </main>
     </div>
   </section>
 </div>
 
+<!-- MODAL -->
 <div id="modal" class="modal hidden">
   <div class="modal-card">
-    <div class="modal-head"><h3 id="modalTitle"></h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-head">
+      <div>
+        <span class="modal-kicker">ALKER CONTROL</span>
+        <h3 id="modalTitle"></h3>
+      </div>
+      <button class="icon-btn modal-close" onclick="closeModal()" aria-label="Tutup">×</button>
+    </div>
     <div id="modalBody"></div>
   </div>
 </div>
 
 <div id="toast" class="toast"></div>
+
 <script src="app.js"></script>
 </body>
 </html>
