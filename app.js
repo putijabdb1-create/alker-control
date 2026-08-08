@@ -581,65 +581,59 @@ function buildNav() {
    */
   else if (r === "ADMIN") {
 
-    groups.push({
+  groups.push({
 
-      title: "CONTROL",
+    title: "CONTROL",
 
-      items: [
+    items: [
 
-        [
-		"master",
-		"⚙",
-		"Master ALKER"
-		],
+      [
+        "master",
+        "⚙",
+        "Master ALKER"
+      ],
 
-		[
-		"users",
-		"♙",
-		"Master User"
-		],
-		
-		[
-		"users",
-		"♙",
-		"Teknisi"
-		],
-		
-        [
-          "teammanage",
-          "♙",
-          "Kelola Tim"
-        ],
+      [
+        "users",
+        "♙",
+        "Master User"
+      ],
 
-        [
-          "allinventory",
-          "▣",
-          "Seluruh Inventory"
-        ],
+      [
+        "teammanage",
+        "♙",
+        "Kelola Tim"
+      ],
 
-        [
-          "warehouse",
-          "▦",
-          "Stok Gudang"
-        ],
+      [
+        "allinventory",
+        "▣",
+        "Seluruh Inventory"
+      ],
 
-        [
-          "procurement",
-          "▤",
-          "Pengadaan"
-        ],
+      [
+        "warehouse",
+        "▦",
+        "Stok Gudang"
+      ],
 
-        [
-          "audit",
-          "◷",
-          "Audit Trail"
-        ]
+      [
+        "procurement",
+        "▤",
+        "Pengadaan"
+      ],
 
+      [
+        "audit",
+        "◷",
+        "Audit Trail"
       ]
 
-    });
-  }
+    ]
 
+  });
+
+}
 
   $("nav").innerHTML =
     groups
@@ -3516,22 +3510,31 @@ async function renderTeamManage() {
                       }
                     </td>
 
-                    <td>
+                   <td>
 
-                      <div class="actions">
+					<div class="actions">
 
-                        <button
-                          class="btn secondary"
-                          onclick='editTeam(${JSON.stringify(x)})'
-                        >
-                          Edit
-                        </button>
+					<button
+					class="btn secondary"
+					onclick='editTeam(${JSON.stringify(x)})'
+						>
+					Edit
+					</button>
 
-                        <span class="badge green">AKTIF</span>
+					<button
+					  class="btn danger"
+					  onclick="disableTeam('${esc(x.teamId)}')"
+					>
+					  Nonaktifkan
+					</button>
 
-                      </div>
+					<span class="badge green">
+					  AKTIF
+					</span>
 
-                    </td>
+				  </div>
+
+				</td>
 
                   </tr>
 
@@ -3582,9 +3585,9 @@ window.editTeam =
 
 async function openTeamEditor(
   existing = null
-) {
+) 
 
-  const r =
+{  const r =
     await api(
       "technicianTeam"
     );
@@ -4028,7 +4031,52 @@ async function openTeamEditor(
 
     };
 }
+/*************************************************
+ * NONAKTIFKAN TIM
+ *************************************************/
 
+window.disableTeam = async teamId => {
+
+  if (!teamId) {
+    toast("ID tim tidak ditemukan.");
+    return;
+  }
+
+  const yakin = confirm(
+    "Nonaktifkan tim ini?\n\n" +
+    "Tim tidak akan dihapus dari histori, " +
+    "tetapi tidak lagi menjadi tim aktif."
+  );
+
+  if (!yakin) {
+    return;
+  }
+
+  try {
+
+    await api(
+      "deleteTechnicianTeam",
+      {
+        teamId: teamId
+      }
+    );
+
+    toast(
+      "Tim berhasil dinonaktifkan."
+    );
+
+    await renderTeamManage();
+
+  } catch (err) {
+
+    toast(
+      err.message ||
+      "Gagal menonaktifkan tim."
+    );
+
+  }
+
+};
 
 /*
  * Nonaktifkan tim belum diaktifkan pada CHECKPOINT 3.2C
