@@ -1073,9 +1073,10 @@ function metric(a, b, c) {
 
 /*************************************************
  * ALKER SAYA
+ * INVENTORY + PENGAJUAN AWAL
  *************************************************/
 
-async function renderMyInventory() {
+async function renderMyInventory(){
 
   $("page").innerHTML = `
 
@@ -1088,7 +1089,8 @@ async function renderMyInventory() {
         </h2>
 
         <p class="muted">
-          Inventory yang secara resmi menjadi
+          Semua ALKER yang Anda laporkan
+          maupun yang sudah resmi menjadi
           tanggung jawab Anda.
         </p>
 
@@ -1107,30 +1109,443 @@ async function renderMyInventory() {
 
     </div>
 
+
     <div id="myInv">
+
       Memuat...
+
     </div>
 
   `;
 
 
-  const r =
-    await api(
-      "inventory",
-      {
-        scope: "mine"
-      }
+  try{
+
+    const [
+      inv,
+      initial
+    ] =
+      await Promise.all([
+
+        api(
+          "inventory",
+          {
+            scope:"mine"
+          }
+        ),
+
+        api(
+          "initialMine"
+        )
+
+      ]);
+
+
+    renderMyInventoryPage(
+
+      $("myInv"),
+
+      inv.data || [],
+
+      initial.data || []
+
     );
 
 
-  renderInventoryTable(
-    $("myInv"),
-    r.data || [],
-    "mine"
-  );
+  }catch(e){
+
+    $("myInv").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat Alker
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
 }
+function renderMyInventoryPage(
+  el,
+  inventory,
+  initial
+){
+
+  const pending =
+    initial.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
+    );
 
 
+  const revision =
+    initial.filter(
+      x =>
+        x.status ===
+        "REVISI"
+    );
+
+
+  const approved =
+    initial.filter(
+      x =>
+        x.status ===
+        "APPROVED"
+    );
+
+
+  const problems =
+    inventory.filter(
+      x =>
+        /RUSAK|HILANG/i.test(
+          x.condition || ""
+        )
+    );
+
+
+  const totalValue =
+    inventory.reduce(
+      (sum,x) =>
+        sum +
+        Number(x.price || 0),
+      0
+    );
+
+
+  el.innerHTML = `
+
+    <!-- RINGKASAN -->
+
+    <div class="card">
+
+      <div class="detail-grid">
+
+
+        <div class="detail-box">
+
+          <span>
+            Inventory Resmi
+          </span>
+
+          <strong>
+            ${inventory.length}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Menunggu Verifikasi
+          </span>
+
+          <strong>
+            ${pending.length}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Perlu Revisi
+          </span>
+
+          <strong>
+            ${revision.length}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Nilai Inventory
+          </span>
+
+          <strong>
+            ${money(totalValue)}
+          </strong>
+
+        </div>
+
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- PENGAJUAN ALKER AWAL -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Pengajuan Alker Awal
+          </h3>
+
+          <p class="muted">
+            Status ALKER yang Anda laporkan
+            kepada Gudang.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>ALKER</th>
+
+              <th>Merk / Type</th>
+
+              <th>SN</th>
+
+              <th>Kondisi</th>
+
+              <th>Tanggal</th>
+
+              <th>Status</th>
+
+              <th>Keterangan</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              initial
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div
+                          class="small muted"
+                        >
+                          ${esc(
+                            x.initialId
+                          )}
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.brand || "-"
+                        )}
+
+                        /
+
+                        ${esc(
+                          x.type || "-"
+                        )}
+
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${initialStatusBadge(
+                          x.status
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.status ===
+                          "REVISI"
+
+                            ? `
+
+                              <div
+                                class="small danger-text"
+                              >
+                                ${esc(
+                                  x.reviewNote ||
+                                  "Mohon perbaiki data."
+                                )}
+                              </div>
+
+                            `
+
+                            : x.status ===
+                              "APPROVED"
+
+                              ? `
+
+                                <span
+                                  class="small muted"
+                                >
+                                  Sudah menjadi
+                                  inventory resmi.
+                                </span>
+
+                              `
+
+                              : `
+
+                                <span
+                                  class="small muted"
+                                >
+                                  Menunggu pemeriksaan
+                                  Gudang.
+                                </span>
+
+                              `
+                        }
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="7">
+
+                    <div class="empty">
+
+                      Belum ada pengajuan
+                      ALKER awal.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- INVENTORY RESMI -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Inventory Resmi
+          </h3>
+
+          <p class="muted">
+            ALKER yang sudah disetujui
+            Gudang dan menjadi tanggung
+            jawab Anda.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      ${
+        inventory.length
+
+          ? renderInventorySimpleTable(
+              inventory
+            )
+
+          : `
+
+            <div class="empty">
+
+              Belum ada ALKER yang
+              disetujui Gudang.
+
+            </div>
+
+          `
+      }
+
+    </div>
+
+  `;
+
+}
 function renderInventoryTable(
   el,
   data,
@@ -6383,3 +6798,185 @@ async function renderAudit() {
   }
 
 })();
+function initialStatusBadge(status){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(s === "REVISI"){
+
+    return `
+      <span class="badge red">
+        PERLU REVISI
+      </span>
+    `;
+
+  }
+
+
+  if(s === "APPROVED"){
+
+    return `
+      <span class="badge green">
+        APPROVED
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s === "DITOLAK"
+  ){
+
+    return `
+      <span class="badge red">
+        DITOLAK
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge">
+      ${esc(status || "-")}
+    </span>
+  `;
+
+}
+function renderInventorySimpleTable(
+  data
+){
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ALKER</th>
+
+            <th>Merk / Type</th>
+
+            <th>Serial Number</th>
+
+            <th>Kondisi</th>
+
+            <th>Status</th>
+
+            <th>Nilai</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            data
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+
+                      <div
+                        class="small muted"
+                      >
+                        ${esc(
+                          x.inventoryId
+                        )}
+                      </div>
+
+                    </td>
+
+
+                    <td>
+
+                      ${esc(
+                        x.brand || "-"
+                      )}
+
+                      /
+
+                      ${esc(
+                        x.type || "-"
+                      )}
+
+                    </td>
+
+
+                    <td>
+                      ${esc(
+                        x.serialNumber ||
+                        "-"
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.condition
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.status
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${money(
+                        x.price
+                      )}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("")
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+}
