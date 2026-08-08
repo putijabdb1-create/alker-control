@@ -1,4 +1,4 @@
-const API_URL = "PASTE_APPS_SCRIPT_WEB_APP_EXEC_URL_HERE";
+const API_URL = "https://script.google.com/macros/s/AKfycbwjCqfw5duO4yJh5lO4sA0UmZiIcEj437TgFNBuGJ71o-yj0lZnaWstO8NTlNXWmU2DsA/exec";
 let session = null;
 let cache = {};
 
