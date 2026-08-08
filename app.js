@@ -6980,3 +6980,143 @@ function renderInventorySimpleTable(
   `;
 
 }
+async function loadPhotoPreview_(
+  photoUrl
+){
+
+  if(!photoUrl){
+
+    return "";
+
+  }
+
+
+  try{
+
+    const r =
+      await api(
+        "photoPreview",
+        {
+          photoUrl:
+            photoUrl
+        }
+      );
+
+
+    return r.data?.dataUrl || "";
+
+  }catch(e){
+
+    console.error(
+      "PHOTO PREVIEW:",
+      e
+    );
+
+    return "";
+
+  }
+
+}
+function photoBox_(
+  title,
+  dataUrl
+){
+
+  if(!dataUrl){
+
+    return `
+
+      <div class="photo-box empty">
+
+        <div class="photo-title">
+          ${esc(title)}
+        </div>
+
+        <div class="photo-empty">
+          Foto tidak tersedia
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  return `
+
+    <div class="photo-box">
+
+      <div class="photo-title">
+        ${esc(title)}
+      </div>
+
+      <img
+        src="${dataUrl}"
+        alt="${esc(title)}"
+        class="photo-preview"
+        onclick="openPhotoViewer_('${dataUrl}')"
+      >
+
+    </div>
+
+  `;
+
+}
+function openPhotoViewer_(
+  dataUrl
+){
+
+  const old =
+    document.getElementById(
+      "photoViewer"
+    );
+
+
+  if(old){
+
+    old.remove();
+
+  }
+
+
+  const div =
+    document.createElement(
+      "div"
+    );
+
+
+  div.id =
+    "photoViewer";
+
+
+  div.className =
+    "photo-viewer";
+
+
+  div.innerHTML = `
+
+    <button
+      class="photo-viewer-close"
+      onclick="
+        document.getElementById(
+          'photoViewer'
+        ).remove()
+      "
+    >
+      ×
+    </button>
+
+    <img
+      src="${dataUrl}"
+      class="photo-viewer-img"
+    >
+
+  `;
+
+
+  document.body.appendChild(
+    div
+  );
+
+}
