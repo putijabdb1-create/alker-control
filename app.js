@@ -1,3 +1,4 @@
+/* ALKER CONTROL CHECKPOINT 3.1 FIXED - API SESSION WRAPPER */
 const API_URL = "https://script.google.com/macros/s/AKfycbwjCqfw5duO4yJh5lO4sA0UmZiIcEj437TgFNBuGJ71o-yj0lZnaWstO8NTlNXWmU2DsA/exec";
 let session = null;
 let cache = {};
@@ -35,25 +36,38 @@ window.closeModal=closeModal;
 
 $("loginForm").addEventListener("submit",async e=>{
   e.preventDefault(); $("loginMsg").textContent="Memproses...";
-  try{const r=await api("login",{username:$("username").value.trim(),password:$("password").value});session=r.session;localStorage.setItem("alker_session",JSON.stringify(session));initApp()}
+  try{const r=await api("login",{username:$("username").value.trim(),password:$("password").value});
+    session=r.data?.session || r.session;
+    if(!session || !session.token) throw new Error("Session login tidak diterima dari server.");
+    localStorage.setItem("alker_session",JSON.stringify(session));
+    await initApp()}
   catch(err){$("loginMsg").textContent=err.message}
 });
 $("logoutBtn").onclick=()=>{localStorage.removeItem("alker_session");session=null;$("mainView").classList.add("hidden");$("loginView").classList.remove("hidden")};
-$("mobileMenu").onclick=()=>$("sidebar").classList.toggle("open");
+const mobileMenu=$("mobileMenu");
+if(mobileMenu) mobileMenu.onclick=()=> $("sidebar")?.classList.toggle("open");
 
 async function initApp(){
-  $("loginView").classList.add("hidden");
-  $("mainView").classList.remove("hidden");
-  const name=session?.name||"User";
-  const role=session?.role||"ROLE";
-  const loker=session?.loker||"-";
-  $("topUser").textContent=name;
+  if(!session || !session.token){
+    console.warn("initApp dipanggil tanpa session valid.");
+    return;
+  }
+
+  $("loginView")?.classList.add("hidden");
+  $("mainView")?.classList.remove("hidden");
+
+  const name=session.name||"User";
+  const role=session.role||"ROLE";
+  const loker=session.loker||"-";
+
+  if($("topUser")) $("topUser").textContent=name;
   if($("topUserRole")) $("topUserRole").textContent=`${role} • ${loker}`;
   if($("topUserAvatar")) $("topUserAvatar").textContent=name.slice(0,1).toUpperCase();
-  $("sideName").textContent=name;
-  $("sideRole").textContent=role;
-  $("sideLoker").textContent=loker;
-  $("avatar").textContent=name.slice(0,1).toUpperCase();
+  if($("sideName")) $("sideName").textContent=name;
+  if($("sideRole")) $("sideRole").textContent=role;
+  if($("sideLoker")) $("sideLoker").textContent=loker;
+  if($("avatar")) $("avatar").textContent=name.slice(0,1).toUpperCase();
+
   buildNav();
   await route("dashboard");
 }
@@ -161,7 +175,7 @@ async function route(name){
 
 async function dashboardData(){return api("dashboard")}
 async function renderDashboard(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Dashboard</h2><div class="muted">${esc(session.loker||"Semua")} • ${esc(session.name)}</div></div></div><div id="dashBody"></div>`;
+  $("page").innerHTML=`<div class="page-head"><div><h2>Dashboard</h2><div class="muted">${esc(session?.loker||"Semua")} • ${esc(session?.name||"User")}</div></div></div><div id="dashBody"></div>`;
   const r=await dashboardData(), d=r.data;
   $("dashBody").innerHTML=`
   <div class="grid cards">
@@ -194,7 +208,6 @@ function renderInventoryTable(el,data,scope){
   </tbody></table></div>`;
 }
 window.showInventoryDetail=x=>openModal("Detail Inventory",`<div class="detail-grid">${[['ID',x.inventoryId],['Alker',x.itemName],['Kategori',x.category],['Merk',x.brand],['Type',x.type],['Serial Number',x.serialNumber],['Lokasi',x.location],['Pemegang',x.holder],['Loker',x.loker],['Kondisi',x.condition],['Status',x.status],['Nilai',money(x.price)]].map(a=>`<div class="detail-box"><span>${esc(a[0])}</span><strong>${esc(a[1]||"-")}</strong></div>`).join("")}</div>${x.photoUrl?`<p><a href="${esc(x.photoUrl)}" target="_blank">Buka foto</a></p>`:""}<div class="actions"><button class="btn warning" onclick="closeModal();showIssueForm('${esc(x.inventoryId)}')">Lapor Masalah</button></div>`);
-
 async function renderInitialReport(){
   $("page").innerHTML=`
     <div class="page-head">
@@ -241,7 +254,6 @@ async function renderInitialReport(){
     $("reportBody").innerHTML=`<div class="card"><strong>Gagal memuat laporan</strong><p class="danger-text">${esc(e.message)}</p></div>`;
   }
 }
-
 async function renderRequests(){
   $("page").innerHTML=`<div class="page-head"><div><h2>Request Alker</h2><p class="muted">Request baru atau penggantian mengikuti alur validasi.</p></div><button class="btn primary" onclick="showRequestForm()">+ Request</button></div><div id="req"></div>`;
   const r=await api("requests",{scope:"mine"});$("req").innerHTML=tableRequests(r.data);
@@ -313,5 +325,20 @@ async function renderAllInventory(){const r=await api("inventory",{scope:"all"})
 async function renderMaster(){const r=await api("masters");$("page").innerHTML=`<div class="page-head"><div><h2>Master Data</h2><p class="muted">Daftar loker dan master ALKER. Tambah item baru dapat dilakukan dari sini.</p></div><button class="btn primary" onclick="showMasterForm()">+ Tambah ALKER</button></div><div class="grid two"><div class="card"><h3>Loker</h3>${r.data.lokers.map(x=>`<div class="kpi-line"><span>${esc(x.name)}</span>${badge(x.status||"AKTIF")}</div>`).join("")}</div><div class="card"><h3>Master ALKER (${r.data.items.length})</h3>${r.data.items.slice(0,40).map(x=>`<div class="kpi-line"><span>${esc(x.itemName)}<small class="muted"> ${esc(x.category)}</small></span><span>${esc(x.lokers||"-")}</span></div>`).join("")}</div></div>`}
 window.showMasterForm=async()=>{const r=await api("masters");openModal("Tambah Master ALKER",`<form id="masterForm"><div class="form-grid"><label>Nama ALKER<input name="itemName" required></label><label>Kategori<input name="category" required></label><label>Satuan<input name="unit" value="UNIT"></label><label>Harga standar<input name="price" type="number" min="0"></label><label class="full-col">Loker pengguna<select name="loker" multiple size="5">${r.data.lokers.filter(x=>x.name!=="GUDANG").map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select></label><label class="full-col">Merk/Spesifikasi<textarea name="spec"></textarea></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Simpan</button></div></form>`);$("masterForm").onsubmit=async e=>{e.preventDefault();const f=e.target;const lokers=[...f.loker.selectedOptions].map(o=>o.value).join("|");try{await api("addMasterItem",{itemName:f.itemName.value,category:f.category.value,unit:f.unit.value,price:f.price.value,lokers,spec:f.spec.value});closeModal();toast("Master ALKER ditambahkan");renderMaster()}catch(err){toast(err.message)}}}
 async function renderAudit(){const r=await api("audit");$("page").innerHTML=`<div class="page-head"><div><h2>Audit Trail</h2><p class="muted">Catatan aktivitas sistem.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Actor</th><th>Action</th><th>Deskripsi</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.description)}</td></tr>`).join("")||'<tr><td colspan="4"><div class="empty">Belum ada audit.</div></td></tr>'}</tbody></table></div>`}
-
-(async()=>{try{const s=JSON.parse(localStorage.getItem("alker_session")||"null");if(s){session=s;const v=await api("me");if(v.ok)initApp()} }catch(e){localStorage.removeItem("alker_session")}})();
+(async()=>{
+  try{
+    const s=JSON.parse(localStorage.getItem("alker_session")||"null");
+    if(!s || !s.token) return;
+    session=s;
+    const v=await api("me");
+    session=v.data?.session || v.session || session;
+    if(session && session.token){
+      localStorage.setItem("alker_session",JSON.stringify(session));
+      await initApp();
+    }
+  }catch(e){
+    console.error("Restore session gagal:",e);
+    localStorage.removeItem("alker_session");
+    session=null;
+  }
+})();
