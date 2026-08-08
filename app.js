@@ -42,29 +42,96 @@ $("logoutBtn").onclick=()=>{localStorage.removeItem("alker_session");session=nul
 $("mobileMenu").onclick=()=>$("sidebar").classList.toggle("open");
 
 async function initApp(){
-  $("loginView").classList.add("hidden");$("mainView").classList.remove("hidden");
-  $("topUser").textContent=`${session.name} • ${session.role}`;
-  $("sideName").textContent=session.name;$("sideRole").textContent=session.role;$("sideLoker").textContent=session.loker||"-";
-  $("avatar").textContent=(session.name||"U").slice(0,1).toUpperCase();
-  buildNav(); await route("dashboard");
+  $("loginView").classList.add("hidden");
+  $("mainView").classList.remove("hidden");
+  const name=session?.name||"User";
+  const role=session?.role||"ROLE";
+  const loker=session?.loker||"-";
+  $("topUser").textContent=name;
+  if($("topUserRole")) $("topUserRole").textContent=`${role} • ${loker}`;
+  if($("topUserAvatar")) $("topUserAvatar").textContent=name.slice(0,1).toUpperCase();
+  $("sideName").textContent=name;
+  $("sideRole").textContent=role;
+  $("sideLoker").textContent=loker;
+  $("avatar").textContent=name.slice(0,1).toUpperCase();
+  buildNav();
+  await route("dashboard");
 }
 function buildNav(){
-  const r=session.role, items=[["dashboard","⌂","Dashboard"]];
-  if(r==="TEKNISI") items.push(["myinventory","▣","Alker Saya"],["requests","＋","Request Alker"],["issues","!","Rusak / Hilang"],["returns","↩","Pengembalian"],["history","◷","Riwayat"]);
-  if(r==="LEADER") items.push(["team","♙","Teknisi Loker"],["teamrequests","✓","Validasi Request"],["teaminventory","▣","Inventory Loker"]);
-  if(r==="SPV_GUDANG") items.push(["warehouse","▦","Stok Gudang"],["initial","✓","Verifikasi Inventory"],["requests","＋","Request Teknisi"],["receiving","↓","Barang Masuk"],["distribution","↑","Distribusi"],["returns","↩","Pengembalian"],["procurement","▤","Pengadaan"],["allinventory","▣","Seluruh Inventory"]);
-  if(r==="ADMIN") items.push(["master","⚙","Master Data"],["allinventory","▣","Seluruh Inventory"],["warehouse","▦","Stok Gudang"],["procurement","▤","Pengadaan"],["audit","◷","Audit Trail"]);
-  $("nav").innerHTML=items.map(x=>`<button class="nav-btn" data-route="${x[0]}">${x[1]} &nbsp; ${x[2]}</button>`).join("");
-  document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");route(b.dataset.route);$("sidebar").classList.remove("open")});
+  const r=session?.role||"";
+  const groups=[{title:"UTAMA",items:[["dashboard","⌂","Dashboard"]]}];
+
+  if(r==="TEKNISI"){
+    groups.push(
+      {title:"ALKER SAYA",items:[
+        ["myinventory","▣","Alker Saya"],
+        ["initialReport","▤","Laporan Alker"],
+        ["requests","＋","Request Alker"],
+        ["issues","!","Rusak / Hilang"],
+        ["returns","↩","Pengembalian"]
+      ]}
+    );
+  }else if(r==="LEADER"){
+    groups.push(
+      {title:"TIM",items:[
+        ["team","♙","Teknisi Loker"],
+        ["teamrequests","✓","Validasi Request"],
+        ["teaminventory","▣","Inventory Loker"]
+      ]}
+    );
+  }else if(r==="SPV_GUDANG"){
+    groups.push(
+      {title:"GUDANG",items:[
+        ["warehouse","▦","Stok Gudang"],
+        ["initial","✓","Verifikasi Inventory"],
+        ["requests","＋","Request Teknisi"],
+        ["receiving","↓","Barang Masuk"],
+        ["distribution","↑","Distribusi"],
+        ["returns","↩","Pengembalian"]
+      ]},
+      {title:"PENGADAAN",items:[["procurement","▤","Pengadaan"]]},
+      {title:"INVENTORY",items:[["allinventory","▣","Seluruh Inventory"]]}
+    );
+  }else if(r==="ADMIN"){
+    groups.push(
+      {title:"CONTROL",items:[
+        ["master","⚙","Master Data"],
+        ["allinventory","▣","Seluruh Inventory"],
+        ["warehouse","▦","Stok Gudang"],
+        ["procurement","▤","Pengadaan"],
+        ["audit","◷","Audit Trail"]
+      ]}
+    );
+  }else{
+    groups.push({title:"SISTEM",items:[["dashboard","⌂","Dashboard"]]});
+  }
+
+  $("nav").innerHTML=groups.map(g=>`
+    <div class="nav-group">
+      <div class="nav-group-title">${g.title}</div>
+      ${g.items.map(x=>`<button type="button" class="nav-btn" data-route="${x[0]}">
+        <span class="nav-icon">${x[1]}</span><span>${x[2]}</span>
+      </button>`).join("")}
+    </div>`).join("");
+
+  const buttons=[...document.querySelectorAll(".nav-btn")];
+  buttons.forEach(b=>b.onclick=async()=>{
+    buttons.forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    await route(b.dataset.route);
+    $("sidebar").classList.remove("open");
+  });
+  const first=buttons.find(b=>b.dataset.route==="dashboard");
+  if(first) first.classList.add("active");
 }
 async function route(name){
   try{
     if(name==="dashboard") return renderDashboard();
     if(name==="myinventory") return renderMyInventory();
+    if(name==="initialReport") return renderInitialReport();
     if(name==="requests") return renderRequests();
     if(name==="issues") return renderIssues();
     if(name==="returns") return renderReturns();
-    if(name==="history") return renderHistory();
     if(name==="team") return renderTeam();
     if(name==="teamrequests") return renderTeamRequests();
     if(name==="teaminventory") return renderTeamInventory();
@@ -114,6 +181,53 @@ function renderInventoryTable(el,data,scope){
   </tbody></table></div>`;
 }
 window.showInventoryDetail=x=>openModal("Detail Inventory",`<div class="detail-grid">${[['ID',x.inventoryId],['Alker',x.itemName],['Kategori',x.category],['Merk',x.brand],['Type',x.type],['Serial Number',x.serialNumber],['Lokasi',x.location],['Pemegang',x.holder],['Loker',x.loker],['Kondisi',x.condition],['Status',x.status],['Nilai',money(x.price)]].map(a=>`<div class="detail-box"><span>${esc(a[0])}</span><strong>${esc(a[1]||"-")}</strong></div>`).join("")}</div>${x.photoUrl?`<p><a href="${esc(x.photoUrl)}" target="_blank">Buka foto</a></p>`:""}<div class="actions"><button class="btn warning" onclick="closeModal();showIssueForm('${esc(x.inventoryId)}')">Lapor Masalah</button></div>`);
+
+async function renderInitialReport(){
+  $("page").innerHTML=`
+    <div class="page-head">
+      <div>
+        <h2>Laporan Alker</h2>
+        <p class="muted">Laporkan kondisi ALKER yang Anda pegang. Data awal akan diverifikasi Gudang sebelum menjadi inventory resmi.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" onclick="showInitialForm()">+ Tambah Laporan</button>
+      </div>
+    </div>
+    <div id="reportBody"></div>`;
+  try{
+    const r=await api("inventory",{scope:"mine"});
+    const issues=await api("issues",{scope:"mine"});
+    const items=r.data||[];
+    const problems=(issues.data||[]).filter(x=>/MENUNGGU|PROSES/.test(String(x.status||"")));
+    $("reportBody").innerHTML=`
+      <div class="grid cards">
+        ${metric("ALKER Tercatat",items.length,"tanggung jawab")}
+        ${metric("Kondisi Bermasalah",items.filter(x=>/RUSAK|HILANG/.test(String(x.condition||""))).length,"perlu perhatian")}
+        ${metric("Laporan Masalah",problems.length,"menunggu proses")}
+      </div>
+      <div style="height:15px"></div>
+      <div class="card">
+        <div class="section-head"><div><h3>ALKER Saya</h3><p class="muted">Gunakan tombol detail untuk melihat kondisi dan melaporkan masalah.</p></div></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>ALKER</th><th>Merk / Type</th><th>SN</th><th>Kondisi</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              ${items.map(x=>`<tr>
+                <td><strong>${esc(x.itemName)}</strong><div class="small muted">${esc(x.inventoryId)}</div></td>
+                <td>${esc(x.brand||"-")} / ${esc(x.type||"-")}</td>
+                <td>${esc(x.serialNumber||"-")}</td>
+                <td>${badge(x.condition)}</td>
+                <td>${badge(x.status)}</td>
+                <td><button class="btn secondary" onclick='showInventoryDetail(${JSON.stringify(x)})'>Detail / Lapor Kondisi</button></td>
+              </tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada ALKER yang disetujui Gudang.</div></td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }catch(e){
+    $("reportBody").innerHTML=`<div class="card"><strong>Gagal memuat laporan</strong><p class="danger-text">${esc(e.message)}</p></div>`;
+  }
+}
 
 async function renderRequests(){
   $("page").innerHTML=`<div class="page-head"><div><h2>Request Alker</h2><p class="muted">Request baru atau penggantian mengikuti alur validasi.</p></div><button class="btn primary" onclick="showRequestForm()">+ Request</button></div><div id="req"></div>`;
