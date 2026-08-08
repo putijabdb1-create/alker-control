@@ -1,344 +1,5920 @@
-/* ALKER CONTROL CHECKPOINT 3.1 FIXED - API SESSION WRAPPER */
-const API_URL = "https://script.google.com/macros/s/AKfycbwjCqfw5duO4yJh5lO4sA0UmZiIcEj437TgFNBuGJ71o-yj0lZnaWstO8NTlNXWmU2DsA/exec";
+/*************************************************
+ * ALKER CONTROL
+ * CHECKPOINT 3.2B
+ * FRONTEND
+ *************************************************/
+
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbwjCqfw5duO4yJh5lO4sA0UmZiIcEj437TgFNBuGJ71o-yj0lZnaWstO8NTlNXWmU2DsA/exec";
+
 let session = null;
 let cache = {};
 
+/*************************************************
+ * BASIC HELPERS
+ *************************************************/
+
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-const money = n => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n)||0);
-const badge = (s='') => {
+
+const esc = s =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    m => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[m])
+  );
+
+const money = n =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(Number(n) || 0);
+
+const badge = (s = "") => {
   const x = String(s).toUpperCase();
-  let c='gray'; if(/BAIK|APPROVED|SELESAI|READY|AKTIF/.test(x)) c='green'; else if(/MENUNGGU|REVISI|PENDING/.test(x)) c='yellow'; else if(/HILANG|DITOLAK/.test(x)) c='red'; else if(/SERVICE|PROSES|DISTRIBUSI/.test(x)) c='blue'; else if(/RUSAK/.test(x)) c='red';
+
+  let c = "gray";
+
+  if (/BAIK|APPROVED|SELESAI|READY|AKTIF/.test(x)) {
+    c = "green";
+  } else if (/MENUNGGU|REVISI|PENDING/.test(x)) {
+    c = "yellow";
+  } else if (/HILANG|DITOLAK/.test(x)) {
+    c = "red";
+  } else if (/SERVICE|PROSES|DISTRIBUSI/.test(x)) {
+    c = "blue";
+  } else if (/RUSAK/.test(x)) {
+    c = "red";
+  }
+
   return `<span class="badge ${c}">${esc(s)}</span>`;
 };
 
-async function api(action, data={}) {
-  if(API_URL.includes("PASTE_")) throw new Error("API_URL belum diisi di app.js");
-  const body = new URLSearchParams({action, ...data});
-  if(session?.token) body.set("token", session.token);
-  const res = await fetch(API_URL,{method:"POST",body});
+
+/*************************************************
+ * API
+ *************************************************/
+
+async function api(action, data = {}) {
+
+  if (API_URL.includes("PASTE_")) {
+    throw new Error("API_URL belum diisi di app.js");
+  }
+
+  const body = new URLSearchParams({
+    action,
+    ...data
+  });
+
+  if (session?.token) {
+    body.set("token", session.token);
+  }
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body
+  });
+
+  if (!res.ok) {
+    throw new Error("Server API tidak dapat dihubungi.");
+  }
+
   const json = await res.json();
-  if(!json.ok) throw new Error(json.message || "Terjadi kesalahan");
+
+  if (!json.ok) {
+    throw new Error(
+      json.message || "Terjadi kesalahan."
+    );
+  }
+
   return json;
 }
-async function fileToBase64(file, max=1200){
-  if(!file) return "";
-  const img = await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=URL.createObjectURL(file)});
-  const scale=Math.min(1,max/Math.max(img.width,img.height));
-  const c=document.createElement("canvas");c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-  return c.toDataURL("image/jpeg",.78);
+
+
+/*************************************************
+ * IMAGE
+ *************************************************/
+
+async function fileToBase64(file, max = 1200) {
+
+  if (!file) return "";
+
+  const img = await new Promise((resolve, reject) => {
+
+    const i = new Image();
+
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+
+    i.src = URL.createObjectURL(file);
+  });
+
+  const scale =
+    Math.min(
+      1,
+      max / Math.max(img.width, img.height)
+    );
+
+  const c = document.createElement("canvas");
+
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+
+  c.getContext("2d").drawImage(
+    img,
+    0,
+    0,
+    c.width,
+    c.height
+  );
+
+  return c.toDataURL(
+    "image/jpeg",
+    0.78
+  );
 }
-function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
-function openModal(title,html){$("modalTitle").textContent=title;$("modalBody").innerHTML=html;$("modal").classList.remove("hidden")}
-function closeModal(){$("modal").classList.add("hidden")}
-window.closeModal=closeModal;
 
-$("loginForm").addEventListener("submit",async e=>{
-  e.preventDefault(); $("loginMsg").textContent="Memproses...";
-  try{const r=await api("login",{username:$("username").value.trim(),password:$("password").value});
-    session=r.data?.session || r.session;
-    if(!session || !session.token) throw new Error("Session login tidak diterima dari server.");
-    localStorage.setItem("alker_session",JSON.stringify(session));
-    await initApp()}
-  catch(err){$("loginMsg").textContent=err.message}
-});
-$("logoutBtn").onclick=()=>{localStorage.removeItem("alker_session");session=null;$("mainView").classList.add("hidden");$("loginView").classList.remove("hidden")};
-const mobileMenu=$("mobileMenu");
-if(mobileMenu) mobileMenu.onclick=()=> $("sidebar")?.classList.toggle("open");
 
-async function initApp(){
-  if(!session || !session.token){
-    console.warn("initApp dipanggil tanpa session valid.");
+/*************************************************
+ * UI
+ *************************************************/
+
+function toast(msg) {
+
+  const t = $("toast");
+
+  if (!t) {
+    alert(msg);
     return;
   }
 
-  $("loginView")?.classList.add("hidden");
-  $("mainView")?.classList.remove("hidden");
+  t.textContent = msg;
 
-  const name=session.name||"User";
-  const role=session.role||"ROLE";
-  const loker=session.loker||"-";
+  t.classList.add("show");
 
-  if($("topUser")) $("topUser").textContent=name;
-  if($("topUserRole")) $("topUserRole").textContent=`${role} • ${loker}`;
-  if($("topUserAvatar")) $("topUserAvatar").textContent=name.slice(0,1).toUpperCase();
-  if($("sideName")) $("sideName").textContent=name;
-  if($("sideRole")) $("sideRole").textContent=role;
-  if($("sideLoker")) $("sideLoker").textContent=loker;
-  if($("avatar")) $("avatar").textContent=name.slice(0,1).toUpperCase();
+  setTimeout(() => {
+    t.classList.remove("show");
+  }, 2600);
+}
+
+
+function openModal(title, html) {
+
+  if (!$("modal")) {
+    alert(html.replace(/<[^>]+>/g, ""));
+    return;
+  }
+
+  $("modalTitle").textContent = title;
+  $("modalBody").innerHTML = html;
+  $("modal").classList.remove("hidden");
+}
+
+
+function closeModal() {
+
+  $("modal")?.classList.add("hidden");
+}
+
+window.closeModal = closeModal;
+
+
+/*************************************************
+ * LOGIN
+ *************************************************/
+
+$("loginForm")?.addEventListener(
+  "submit",
+  async e => {
+
+    e.preventDefault();
+
+    $("loginMsg").textContent =
+      "Memproses login...";
+
+    try {
+
+      const r = await api(
+        "login",
+        {
+          username:
+            $("username").value.trim(),
+
+          password:
+            $("password").value
+        }
+      );
+
+      /*
+       * BACKEND:
+       * ok -> data -> session
+       */
+      session = r.data?.session;
+
+      if (!session) {
+        throw new Error(
+          "Session login tidak ditemukan."
+        );
+      }
+
+      localStorage.setItem(
+        "alker_session",
+        JSON.stringify(session)
+      );
+
+      await initApp();
+
+    } catch (err) {
+
+      $("loginMsg").textContent =
+        err.message;
+    }
+  }
+);
+
+
+/*************************************************
+ * LOGOUT
+ *************************************************/
+
+$("logoutBtn")?.addEventListener(
+  "click",
+  () => {
+
+    localStorage.removeItem(
+      "alker_session"
+    );
+
+    session = null;
+
+    $("mainView")?.classList.add(
+      "hidden"
+    );
+
+    $("loginView")?.classList.remove(
+      "hidden"
+    );
+  }
+);
+
+
+/*************************************************
+ * MOBILE
+ *************************************************/
+
+$("mobileMenu")?.addEventListener(
+  "click",
+  () => {
+    $("sidebar")?.classList.toggle(
+      "open"
+    );
+  }
+);
+
+
+/*************************************************
+ * INIT APP
+ *************************************************/
+
+async function initApp() {
+
+  if (!session) return;
+
+  $("loginView")?.classList.add(
+    "hidden"
+  );
+
+  $("mainView")?.classList.remove(
+    "hidden"
+  );
+
+  const name =
+    session.name || "User";
+
+  const role =
+    session.role || "ROLE";
+
+  const loker =
+    session.loker || "-";
+
+  if ($("topUser")) {
+    $("topUser").textContent =
+      name;
+  }
+
+  if ($("topUserRole")) {
+    $("topUserRole").textContent =
+      `${role} • ${loker}`;
+  }
+
+  if ($("topUserAvatar")) {
+    $("topUserAvatar").textContent =
+      name
+        .slice(0, 1)
+        .toUpperCase();
+  }
+
+  if ($("sideName")) {
+    $("sideName").textContent =
+      name;
+  }
+
+  if ($("sideRole")) {
+    $("sideRole").textContent =
+      role;
+  }
+
+  if ($("sideLoker")) {
+    $("sideLoker").textContent =
+      loker;
+  }
+
+  if ($("avatar")) {
+    $("avatar").textContent =
+      name
+        .slice(0, 1)
+        .toUpperCase();
+  }
 
   buildNav();
+
   await route("dashboard");
 }
-function buildNav(){
-  const r=session?.role||"";
-  const groups=[{title:"UTAMA",items:[["dashboard","⌂","Dashboard"]]}];
 
-  if(r==="TEKNISI"){
-    groups.push(
-      {title:"ALKER SAYA",items:[
-        ["myinventory","▣","Alker Saya"],
-        ["initialReport","▤","Laporan Alker"],
-        ["requests","＋","Request Alker"],
-        ["issues","!","Rusak / Hilang"],
-        ["returns","↩","Pengembalian"]
-      ]}
-    );
-  }else if(r==="LEADER"){
-    groups.push(
-      {title:"TIM",items:[
-        ["team","♙","Teknisi Loker"],
-        ["teamrequests","✓","Validasi Request"],
-        ["teaminventory","▣","Inventory Loker"]
-      ]}
-    );
-  }else if(r==="SPV_GUDANG"){
-    groups.push(
-      {title:"GUDANG",items:[
-        ["warehouse","▦","Stok Gudang"],
-        ["initial","✓","Verifikasi Inventory"],
-        ["requests","＋","Request Teknisi"],
-        ["receiving","↓","Barang Masuk"],
-        ["distribution","↑","Distribusi"],
-        ["returns","↩","Pengembalian"]
-      ]},
-      {title:"PENGADAAN",items:[["procurement","▤","Pengadaan"]]},
-      {title:"INVENTORY",items:[["allinventory","▣","Seluruh Inventory"]]}
-    );
-  }else if(r==="ADMIN"){
-    groups.push(
-      {title:"CONTROL",items:[
-        ["master","⚙","Master Data"],
-        ["allinventory","▣","Seluruh Inventory"],
-        ["warehouse","▦","Stok Gudang"],
-        ["procurement","▤","Pengadaan"],
-        ["audit","◷","Audit Trail"]
-      ]}
-    );
-  }else{
-    groups.push({title:"SISTEM",items:[["dashboard","⌂","Dashboard"]]});
+
+/*************************************************
+ * NAVIGATION
+ *************************************************/
+
+function buildNav() {
+
+  const r =
+    session?.role || "";
+
+  const groups = [
+    {
+      title: "UTAMA",
+      items: [
+        ["dashboard", "⌂", "Dashboard"]
+      ]
+    }
+  ];
+
+
+  /*
+   * TEKNISI
+   */
+  if (r === "TEKNISI") {
+
+    groups.push({
+
+      title: "ALKER SAYA",
+
+      items: [
+
+        [
+          "myinventory",
+          "▣",
+          "Alker Saya"
+        ],
+
+        [
+          "initialReport",
+          "▤",
+          "Laporan Alker"
+        ],
+
+        [
+          "team",
+          "♙",
+          "Tim Saya"
+        ],
+
+        [
+          "requests",
+          "＋",
+          "Request Alker"
+        ],
+
+        [
+          "issues",
+          "!",
+          "Rusak / Hilang"
+        ],
+
+        [
+          "returns",
+          "↩",
+          "Pengembalian"
+        ]
+      ]
+    });
   }
 
-  $("nav").innerHTML=groups.map(g=>`
-    <div class="nav-group">
-      <div class="nav-group-title">${g.title}</div>
-      ${g.items.map(x=>`<button type="button" class="nav-btn" data-route="${x[0]}">
-        <span class="nav-icon">${x[1]}</span><span>${x[2]}</span>
-      </button>`).join("")}
-    </div>`).join("");
 
-  const buttons=[...document.querySelectorAll(".nav-btn")];
-  buttons.forEach(b=>b.onclick=async()=>{
-    buttons.forEach(x=>x.classList.remove("active"));
-    b.classList.add("active");
-    await route(b.dataset.route);
-    $("sidebar").classList.remove("open");
+  /*
+   * LEADER
+   */
+  else if (r === "LEADER") {
+
+    groups.push({
+
+      title: "TIM",
+
+      items: [
+
+        [
+          "team",
+          "♙",
+          "Teknisi Loker"
+        ],
+
+        [
+          "teammanage",
+          "⚙",
+          "Kelola Tim"
+        ],
+
+        [
+          "teamrequests",
+          "✓",
+          "Validasi Request"
+        ],
+
+        [
+          "teaminventory",
+          "▣",
+          "Inventory Loker"
+        ]
+      ]
+    });
+  }
+
+
+  /*
+   * SPV GUDANG
+   */
+  else if (r === "SPV_GUDANG") {
+
+    groups.push({
+
+      title: "GUDANG",
+
+      items: [
+
+        [
+          "warehouse",
+          "▦",
+          "Stok Gudang"
+        ],
+
+        [
+          "initial",
+          "✓",
+          "Verifikasi Inventory"
+        ],
+
+        [
+          "requests",
+          "＋",
+          "Request Teknisi"
+        ],
+
+        [
+          "teammanage",
+          "♙",
+          "Kelola Tim"
+        ],
+
+        [
+          "receiving",
+          "↓",
+          "Barang Masuk"
+        ],
+
+        [
+          "distribution",
+          "↑",
+          "Distribusi"
+        ],
+
+        [
+          "returns",
+          "↩",
+          "Pengembalian"
+        ]
+      ]
+
+    });
+
+
+    groups.push({
+
+      title: "PENGADAAN",
+
+      items: [
+
+        [
+          "procurement",
+          "▤",
+          "Pengadaan"
+        ]
+
+      ]
+
+    });
+
+
+    groups.push({
+
+      title: "INVENTORY",
+
+      items: [
+
+        [
+          "allinventory",
+          "▣",
+          "Seluruh Inventory"
+        ]
+
+      ]
+
+    });
+  }
+
+
+  /*
+   * ADMIN
+   */
+  else if (r === "ADMIN") {
+
+    groups.push({
+
+      title: "CONTROL",
+
+      items: [
+
+        [
+          "master",
+          "⚙",
+          "Master Data"
+        ],
+
+        [
+          "teammanage",
+          "♙",
+          "Kelola Tim"
+        ],
+
+        [
+          "allinventory",
+          "▣",
+          "Seluruh Inventory"
+        ],
+
+        [
+          "warehouse",
+          "▦",
+          "Stok Gudang"
+        ],
+
+        [
+          "procurement",
+          "▤",
+          "Pengadaan"
+        ],
+
+        [
+          "audit",
+          "◷",
+          "Audit Trail"
+        ]
+
+      ]
+
+    });
+  }
+
+
+  $("nav").innerHTML =
+    groups
+      .map(g => `
+
+        <div class="nav-group">
+
+          <div class="nav-group-title">
+            ${g.title}
+          </div>
+
+          ${g.items
+            .map(
+              x => `
+
+              <button
+                type="button"
+                class="nav-btn"
+                data-route="${x[0]}"
+              >
+
+                <span class="nav-icon">
+                  ${x[1]}
+                </span>
+
+                <span>
+                  ${x[2]}
+                </span>
+
+              </button>
+
+            `
+            )
+            .join("")}
+
+        </div>
+
+      `)
+      .join("");
+
+
+  const buttons =
+    [
+      ...document.querySelectorAll(
+        ".nav-btn"
+      )
+    ];
+
+
+  buttons.forEach(btn => {
+
+    btn.onclick = async () => {
+
+      buttons.forEach(
+        x =>
+          x.classList.remove(
+            "active"
+          )
+      );
+
+      btn.classList.add(
+        "active"
+      );
+
+      await route(
+        btn.dataset.route
+      );
+
+      $("sidebar")?.classList.remove(
+        "open"
+      );
+    };
+
   });
-  const first=buttons.find(b=>b.dataset.route==="dashboard");
-  if(first) first.classList.add("active");
+
+
+  const first =
+    buttons.find(
+      x =>
+        x.dataset.route ===
+        "dashboard"
+    );
+
+  first?.classList.add(
+    "active"
+  );
 }
-async function route(name){
-  const page=$("page");
-  if(!page){
-    console.error("Elemen #page tidak ditemukan.");
+
+
+/*************************************************
+ * ROUTER
+ *************************************************/
+
+async function route(name) {
+
+  try {
+
+    if (name === "dashboard")
+      return renderDashboard();
+
+    if (name === "myinventory")
+      return renderMyInventory();
+
+    if (name === "initialReport")
+      return renderInitialReport();
+
+    if (name === "team")
+      return renderTeam();
+
+    if (name === "teammanage")
+      return renderTeamManage();
+
+    if (name === "requests")
+      return renderRequests();
+
+    if (name === "issues")
+      return renderIssues();
+
+    if (name === "returns")
+      return renderReturns();
+
+    if (name === "teamrequests")
+      return renderTeamRequests();
+
+    if (name === "teaminventory")
+      return renderTeamInventory();
+
+    if (name === "warehouse")
+      return renderWarehouse();
+
+    if (name === "initial")
+      return renderInitial();
+
+    if (name === "receiving")
+      return renderReceiving();
+
+    if (name === "distribution")
+      return renderDistribution();
+
+    if (name === "procurement")
+      return renderProcurement();
+
+    if (name === "allinventory")
+      return renderAllInventory();
+
+    if (name === "master")
+      return renderMaster();
+
+    if (name === "audit")
+      return renderAudit();
+
+  } catch (e) {
+
+    $("page").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat halaman
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+        <button
+          class="btn secondary"
+          onclick="route('${esc(name)}')"
+        >
+          Coba Lagi
+        </button>
+
+      </div>
+
+    `;
+  }
+}
+
+
+/*************************************************
+ * DASHBOARD
+ *************************************************/
+
+async function renderDashboard() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Dashboard
+        </h2>
+
+        <div class="muted">
+          ${esc(session.loker || "Semua")}
+          •
+          ${esc(session.name)}
+        </div>
+
+      </div>
+
+    </div>
+
+    <div id="dashBody">
+      <div class="card">
+        Memuat dashboard...
+      </div>
+    </div>
+
+  `;
+
+
+  const r =
+    await api("dashboard");
+
+  const d =
+    r.data || {};
+
+
+  $("dashBody").innerHTML = `
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Inventory",
+        d.totalInventory || 0,
+        "unit"
+      )}
+
+      ${metric(
+        "Di Gudang",
+        d.inWarehouse || 0,
+        "unit"
+      )}
+
+      ${metric(
+        "Di Teknisi",
+        d.withTechnicians || 0,
+        "unit"
+      )}
+
+      ${metric(
+        "Nilai Aset",
+        money(d.totalValue),
+        "inventory"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="grid two">
+
+      <div class="card">
+
+        <h3>
+          Ringkasan Kondisi
+        </h3>
+
+        ${
+          Object.entries(
+            d.conditions || {}
+          )
+            .map(
+              ([k, v]) => `
+
+                <div class="kpi-line">
+
+                  <span>
+                    ${esc(k)}
+                  </span>
+
+                  <strong>
+                    ${v}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `<div class="empty">
+             Belum ada data.
+           </div>`
+        }
+
+      </div>
+
+
+      <div class="card">
+
+        <h3>
+          Aktivitas Menunggu
+        </h3>
+
+        ${
+          Object.entries(
+            d.pending || {}
+          )
+            .map(
+              ([k, v]) => `
+
+                <div class="kpi-line">
+
+                  <span>
+                    ${esc(k)}
+                  </span>
+
+                  <strong>
+                    ${v}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `<div class="empty">
+             Tidak ada.
+           </div>`
+        }
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <h3>
+        Posisi Inventory
+      </h3>
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+              <th>Loker/Lokasi</th>
+              <th>Jumlah</th>
+              <th>Nilai</th>
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            ${
+              (d.locations || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(x.name)}
+                      </td>
+
+                      <td>
+                        ${x.count}
+                      </td>
+
+                      <td>
+                        ${money(x.value)}
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `<tr>
+                <td colspan="3">
+                  <div class="empty">
+                    Belum ada inventory.
+                  </div>
+                </td>
+              </tr>`
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+function metric(a, b, c) {
+
+  return `
+
+    <div class="card metric">
+
+      <div class="label">
+        ${esc(a)}
+      </div>
+
+      <div class="value">
+        ${b}
+      </div>
+
+      <div class="sub">
+        ${esc(c)}
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * ALKER SAYA
+ *************************************************/
+
+async function renderMyInventory() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Alker Saya
+        </h2>
+
+        <p class="muted">
+          Inventory yang secara resmi menjadi
+          tanggung jawab Anda.
+        </p>
+
+      </div>
+
+      <div class="actions">
+
+        <button
+          class="btn primary"
+          onclick="showInitialForm()"
+        >
+          + Input Alker Awal
+        </button>
+
+      </div>
+
+    </div>
+
+    <div id="myInv">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "inventory",
+      {
+        scope: "mine"
+      }
+    );
+
+
+  renderInventoryTable(
+    $("myInv"),
+    r.data || [],
+    "mine"
+  );
+}
+
+
+function renderInventoryTable(
+  el,
+  data,
+  scope
+) {
+
+  const total =
+    data.reduce(
+      (a, x) =>
+        a + Number(x.price || 0),
+      0
+    );
+
+
+  const problems =
+    data.filter(
+      x =>
+        /RUSAK|HILANG/i.test(
+          x.condition || ""
+        )
+    ).length;
+
+
+  el.innerHTML = `
+
+    <div
+      class="card"
+      style="margin-bottom:15px"
+    >
+
+      <div class="detail-grid">
+
+        <div class="detail-box">
+
+          <span>
+            Item
+          </span>
+
+          <strong>
+            ${data.length}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Nilai
+          </span>
+
+          <strong>
+            ${money(total)}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Masalah
+          </span>
+
+          <strong>
+            ${problems}
+          </strong>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ID</th>
+            <th>Alker</th>
+            <th>Merk / Type</th>
+            <th>SN</th>
+            <th>Lokasi</th>
+            <th>Pemegang</th>
+            <th>Kondisi</th>
+            <th>Nilai</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            data
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ${esc(x.itemName)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${esc(x.brand || "-")}
+                      /
+                      ${esc(x.type || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.serialNumber || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.location || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.holder || "-")}
+                    </td>
+
+                    <td>
+                      ${badge(x.condition)}
+                    </td>
+
+                    <td>
+                      ${money(x.price)}
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn secondary"
+                        onclick='showInventoryDetail(${JSON.stringify(x)})'
+                      >
+                        Detail
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="9">
+
+                <div class="empty">
+                  Belum ada inventory.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * INVENTORY DETAIL
+ *************************************************/
+
+window.showInventoryDetail = x => {
+
+  openModal(
+    "Detail Inventory",
+
+    `
+
+      <div class="detail-grid">
+
+        ${[
+          ["ID", x.inventoryId],
+          ["Alker", x.itemName],
+          ["Kategori", x.category],
+          ["Merk", x.brand],
+          ["Type", x.type],
+          ["Serial Number", x.serialNumber],
+          ["Lokasi", x.location],
+          ["Pemegang", x.holder],
+          ["Loker", x.loker],
+          ["Kondisi", x.condition],
+          ["Status", x.status],
+          ["Nilai", money(x.price)]
+        ]
+          .map(
+            a => `
+
+              <div class="detail-box">
+
+                <span>
+                  ${esc(a[0])}
+                </span>
+
+                <strong>
+                  ${esc(a[1] || "-")}
+                </strong>
+
+              </div>
+
+            `
+          )
+          .join("")}
+
+      </div>
+
+
+      ${
+        x.photoUrl
+          ? `
+            <p>
+              <a
+                href="${esc(x.photoUrl)}"
+                target="_blank"
+              >
+                Buka Foto Alker
+              </a>
+            </p>
+          `
+          : ""
+      }
+
+
+      ${
+        x.serialPhotoUrl
+          ? `
+            <p>
+              <a
+                href="${esc(x.serialPhotoUrl)}"
+                target="_blank"
+              >
+                Buka Foto Serial
+              </a>
+            </p>
+          `
+          : ""
+      }
+
+
+      ${
+        session.role === "TEKNISI"
+          ? `
+
+            <div class="actions">
+
+              <button
+                class="btn warning"
+                onclick="
+                  closeModal();
+                  showIssueForm('${esc(x.inventoryId)}')
+                "
+              >
+                Lapor Rusak / Hilang
+              </button>
+
+            </div>
+
+          `
+          : ""
+      }
+
+    `
+  );
+};
+
+
+/*************************************************
+ * INPUT ALKER AWAL
+ *************************************************/
+
+window.showInitialForm =
+  async () => {
+
+    const r =
+      await api("masters");
+
+
+    const items =
+      r.data?.items || [];
+
+
+    openModal(
+
+      "Input Alker yang Saat Ini Dipegang",
+
+      `
+
+        <p class="muted">
+
+          Data ini masuk verifikasi Gudang.
+          Belum menjadi inventory resmi
+          sampai disetujui.
+
+        </p>
+
+
+        <form id="initialForm">
+
+          <div class="form-grid">
+
+
+            <label>
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${items
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.itemId)}"
+                      >
+                        ${esc(x.itemName)}
+                      </option>
+
+                    `
+                  )
+                  .join("")}
+
+              </select>
+
+            </label>
+
+
+            <label>
+              Merk
+
+              <input
+                name="brand"
+              >
+
+            </label>
+
+
+            <label>
+              Type
+
+              <input
+                name="type"
+              >
+
+            </label>
+
+
+            <label>
+              Serial Number
+
+              <input
+                name="serialNumber"
+              >
+
+            </label>
+
+
+            <label>
+              Kondisi
+
+              <select
+                name="condition"
+              >
+
+                <option>BAIK</option>
+                <option>RUSAK RINGAN</option>
+                <option>RUSAK BERAT</option>
+
+              </select>
+
+            </label>
+
+
+            <label>
+              Nilai / Harga
+
+              <input
+                name="price"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+              ></textarea>
+
+            </label>
+
+
+            <label>
+
+              Foto Alker
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+            <label>
+
+              Foto Serial / Label
+
+              <input
+                name="serialPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+              type="submit"
+            >
+              Submit Verifikasi
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("initialForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "initialSubmit",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              brand:
+                f.brand.value,
+
+              type:
+                f.type.value,
+
+              serialNumber:
+                f.serialNumber.value,
+
+              condition:
+                f.condition.value,
+
+              price:
+                f.price.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                ),
+
+              serialPhoto:
+                await fileToBase64(
+                  f.serialPhoto.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Inventory dikirim ke Gudang."
+          );
+
+
+          renderMyInventory();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+
+  };
+
+
+/*************************************************
+ * LAPORAN ALKER
+ *************************************************/
+
+async function renderInitialReport() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Laporan Alker
+        </h2>
+
+        <p class="muted">
+
+          Laporkan kondisi ALKER
+          yang Anda pegang.
+
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showInitialForm()"
+      >
+        + Tambah Laporan
+      </button>
+
+    </div>
+
+
+    <div id="reportBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  try {
+
+    const [
+      inv,
+      issues
+    ] =
+      await Promise.all([
+
+        api(
+          "inventory",
+          {scope: "mine"}
+        ),
+
+        api(
+          "issues",
+          {scope: "mine"}
+        )
+
+      ]);
+
+
+    const items =
+      inv.data || [];
+
+
+    const problem =
+      (issues.data || [])
+        .filter(
+          x =>
+            /MENUNGGU|PROSES/i.test(
+              x.status || ""
+            )
+        );
+
+
+    $("reportBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "ALKER Tercatat",
+          items.length,
+          "tanggung jawab"
+        )}
+
+        ${metric(
+          "Kondisi Bermasalah",
+          items.filter(
+            x =>
+              /RUSAK|HILANG/i.test(
+                x.condition || ""
+              )
+          ).length,
+          "perlu perhatian"
+        )}
+
+        ${metric(
+          "Laporan Masalah",
+          problem.length,
+          "menunggu proses"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <h3>
+          ALKER Saya
+        </h3>
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+
+              <tr>
+
+                <th>ALKER</th>
+                <th>Merk / Type</th>
+                <th>SN</th>
+                <th>Kondisi</th>
+                <th>Status</th>
+                <th></th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                items
+                  .map(
+                    x => `
+
+                      <tr>
+
+                        <td>
+
+                          <strong>
+                            ${esc(x.itemName)}
+                          </strong>
+
+                          <div class="small muted">
+                            ${esc(x.inventoryId)}
+                          </div>
+
+                        </td>
+
+                        <td>
+                          ${esc(x.brand || "-")}
+                          /
+                          ${esc(x.type || "-")}
+                        </td>
+
+                        <td>
+                          ${esc(
+                            x.serialNumber || "-"
+                          )}
+                        </td>
+
+                        <td>
+                          ${badge(x.condition)}
+                        </td>
+
+                        <td>
+                          ${badge(x.status)}
+                        </td>
+
+                        <td>
+
+                          <button
+                            class="btn secondary"
+                            onclick='showInventoryDetail(${JSON.stringify(x)})'
+                          >
+                            Detail
+                          </button>
+
+                        </td>
+
+                      </tr>
+
+                    `
+                  )
+                  .join("") ||
+
+                `<tr>
+
+                  <td colspan="6">
+
+                    <div class="empty">
+                      Belum ada ALKER
+                      yang disetujui Gudang.
+                    </div>
+
+                  </td>
+
+                </tr>`
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+  } catch (e) {
+
+    $("reportBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat laporan
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+      </div>
+
+    `;
+  }
+}
+
+
+/*************************************************
+ * REQUEST
+ *************************************************/
+
+async function renderRequests() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Request Alker
+        </h2>
+
+        <p class="muted">
+          Request baru atau penggantian
+          mengikuti alur validasi.
+        </p>
+
+      </div>
+
+
+      ${
+        session.role === "TEKNISI"
+          ? `
+            <button
+              class="btn primary"
+              onclick="showRequestForm()"
+            >
+              + Request
+            </button>
+          `
+          : ""
+      }
+
+    </div>
+
+
+    <div id="req">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const scope =
+    session.role === "TEKNISI"
+      ? "mine"
+      : "loker";
+
+
+  const r =
+    await api(
+      "requests",
+      {scope}
+    );
+
+
+  $("req").innerHTML =
+    tableRequests(
+      r.data || []
+    );
+}
+
+
+function tableRequests(a) {
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Request</th>
+            <th>Teknisi</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th>Tanggal</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            a
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.requestId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.requestType)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn secondary"
+                        onclick='showRequestDetail(${JSON.stringify(x)})'
+                      >
+                        Detail
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="8">
+
+                <div class="empty">
+                  Belum ada request.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showRequestDetail =
+  x => {
+
+    openModal(
+
+      "Detail Request",
+
+      `
+
+        <div class="detail-grid">
+
+          ${[
+            ["Request", x.requestId],
+            ["Teknisi", x.technician],
+            ["Loker", x.loker],
+            ["Alker", x.itemName],
+            ["Jenis", x.requestType],
+            ["Qty", x.qty],
+            ["Prioritas", x.priority],
+            ["Status", x.status],
+            ["Tanggal", x.date]
+          ]
+            .map(
+              a => `
+
+                <div class="detail-box">
+
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong>
+                    ${esc(a[1] || "-")}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        <div
+          class="card"
+          style="margin-top:12px"
+        >
+
+          <strong>
+            Alasan
+          </strong>
+
+          <p>
+            ${esc(x.reason || "-")}
+          </p>
+
+        </div>
+
+      `
+    );
+  };
+
+
+window.showRequestForm =
+  async () => {
+
+    const r =
+      await api("masters");
+
+
+    openModal(
+
+      "Request ALKER",
+
+      `
+
+        <form id="requestForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${(
+                  r.data?.items || []
+                )
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.itemId)}"
+                      >
+
+                        ${esc(x.itemName)}
+                        —
+                        ${esc(x.category)}
+
+                      </option>
+
+                    `
+                  )
+                  .join("")}
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Jenis Request
+
+              <select
+                name="requestType"
+              >
+
+                <option>
+                  BARU
+                </option>
+
+                <option>
+                  PENGGANTIAN
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Prioritas
+
+              <select
+                name="priority"
+              >
+
+                <option>
+                  NORMAL
+                </option>
+
+                <option>
+                  TINGGI
+                </option>
+
+                <option>
+                  MENDESAK
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Alasan
+
+              <textarea
+                name="reason"
+                required
+              ></textarea>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Foto Pendukung
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+              type="submit"
+            >
+              Kirim Request
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("requestForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "createRequest",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              requestType:
+                f.requestType.value,
+
+              qty:
+                f.qty.value,
+
+              priority:
+                f.priority.value,
+
+              reason:
+                f.reason.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Request berhasil dikirim."
+          );
+
+
+          renderRequests();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * RUSAK / HILANG
+ *************************************************/
+
+async function renderIssues() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Rusak / Hilang
+        </h2>
+
+        <p class="muted">
+          Laporkan kondisi ALKER
+          yang menjadi tanggung jawab Anda.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="issues">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "issues",
+      {scope: "mine"}
+    );
+
+
+  $("issues").innerHTML = `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Inventory</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Keterangan</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.issueType)}
+                    </td>
+
+                    <td>
+                      ${esc(x.note)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada laporan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showIssueForm =
+  async id => {
+
+    openModal(
+
+      "Lapor Rusak / Hilang",
+
+      `
+
+        <form id="issueForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Jenis Masalah
+
+              <select
+                name="issueType"
+              >
+
+                <option>
+                  RUSAK
+                </option>
+
+                <option>
+                  HILANG
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+                required
+              ></textarea>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Foto Pendukung
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn warning"
+            >
+              Kirim Laporan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("issueForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "reportIssue",
+            {
+
+              inventoryId: id,
+
+              issueType:
+                f.issueType.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Laporan berhasil dikirim."
+          );
+
+
+          renderIssues();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * PENGEMBALIAN
+ *************************************************/
+
+async function renderReturns() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Pengembalian
+        </h2>
+
+        <p class="muted">
+          Riwayat pengembalian ALKER.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="returns">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "returns",
+      {
+        scope:
+          session.role === "TEKNISI"
+            ? "mine"
+            : "all"
+      }
+    );
+
+
+  $("returns").innerHTML = `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Inventory</th>
+            <th>Alker</th>
+            <th>Kondisi</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${badge(x.condition)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="5">
+
+                <div class="empty">
+                  Belum ada pengembalian.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * TEAM — TEKNISI SAYA
+ *************************************************/
+
+async function renderTeam() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          ${
+            session.role === "TEKNISI"
+              ? "Tim Saya"
+              : "Teknisi Loker"
+          }
+        </h2>
+
+        <p class="muted">
+          ${esc(session.loker || "")}
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="teamBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api("technicianTeam");
+
+
+  const d =
+    r.data || {};
+
+
+  /*
+   * TEKNISI
+   */
+  if (session.role === "TEKNISI") {
+
+    const team =
+      d.team;
+
+
+    if (!team) {
+
+      $("teamBody").innerHTML = `
+
+        <div class="card">
+
+          <h3>
+            Belum ada Tim
+          </h3>
+
+          <p class="muted">
+            Anda belum dimasukkan ke
+            Tim Teknisi.
+          </p>
+
+        </div>
+
+      `;
+
+      return;
+    }
+
+
+    $("teamBody").innerHTML = `
+
+      <div class="grid two">
+
+
+        <div class="card">
+
+          <div class="section-head">
+
+            <div>
+
+              <h3>
+                Teknisi Utama
+              </h3>
+
+              <p class="muted">
+                ${esc(team.loker)}
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div class="detail-box">
+
+            <span>
+              Nama
+            </span>
+
+            <strong>
+              ${esc(team.technicianName)}
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <div class="card">
+
+          <h3>
+            Teknisi 2 / Partner
+          </h3>
+
+          <div class="detail-box">
+
+            <span>
+              Nama
+            </span>
+
+            <strong>
+              ${
+                esc(
+                  team.partnerName ||
+                  "Tidak ada partner"
+                )
+              }
+            </strong>
+
+          </div>
+
+        </div>
+
+
+      </div>
+
+    `;
+
     return;
   }
 
-  page.innerHTML=`<div class="card"><strong>Memuat halaman...</strong><p class="muted">${esc(name)}</p></div>`;
 
-  try{
-    if(name==="dashboard") return await renderDashboard();
-    if(name==="myinventory") return await renderMyInventory();
-    if(name==="initialReport") return await renderInitialReport();
-    if(name==="requests") return await renderRequests();
-    if(name==="issues") return await renderIssues();
-    if(name==="returns") return await renderReturns();
-    if(name==="team") return await renderTeam();
-    if(name==="teamrequests") return await renderTeamRequests();
-    if(name==="teaminventory") return await renderTeamInventory();
-    if(name==="warehouse") return await renderWarehouse();
-    if(name==="initial") return await renderInitial();
-    if(name==="receiving") return await renderReceiving();
-    if(name==="distribution") return await renderDistribution();
-    if(name==="procurement") return await renderProcurement();
-    if(name==="allinventory") return await renderAllInventory();
-    if(name==="master") return await renderMaster();
-    if(name==="audit") return await renderAudit();
+  /*
+   * LEADER / ADMIN / SPV
+   */
+  const teams =
+    d.teams || [];
 
-    page.innerHTML=`<div class="card"><strong>Menu belum tersedia</strong><p class="muted">Route: ${esc(name)}</p></div>`;
-  }catch(e){
-    console.error("ROUTE ERROR:",name,e);
-    page.innerHTML=`<div class="card"><strong>Gagal memuat halaman</strong><p class="danger-text">${esc(e.message||e)}</p><button class="btn secondary" onclick="route('${esc(name)}')">Coba Lagi</button></div>`;
-  }
-}
 
-async function dashboardData(){return api("dashboard")}
-async function renderDashboard(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Dashboard</h2><div class="muted">${esc(session?.loker||"Semua")} • ${esc(session?.name||"User")}</div></div></div><div id="dashBody"></div>`;
-  const r=await dashboardData(), d=r.data;
-  $("dashBody").innerHTML=`
-  <div class="grid cards">
-    ${metric("Total Inventory",d.totalInventory,"unit")}
-    ${metric("Di Gudang",d.inWarehouse,"unit")}
-    ${metric("Di Teknisi",d.withTechnicians,"unit")}
-    ${metric("Nilai Aset",money(d.totalValue),"inventory")}
-  </div>
-  <div style="height:15px"></div>
-  <div class="grid two">
-    <div class="card"><h3>Ringkasan Kondisi</h3>${Object.entries(d.conditions||{}).map(([k,v])=>`<div class="kpi-line"><span>${esc(k)}</span><strong>${v}</strong></div>`).join("")||'<div class="empty">Belum ada data.</div>'}</div>
-    <div class="card"><h3>Aktivitas Menunggu</h3>${Object.entries(d.pending||{}).map(([k,v])=>`<div class="kpi-line"><span>${esc(k)}</span><strong>${v}</strong></div>`).join("")||'<div class="empty">Tidak ada.</div>'}</div>
-  </div>
-  <div style="height:15px"></div>
-  <div class="card"><h3>Posisi Inventory</h3><div class="table-wrap"><table class="table"><thead><tr><th>Loker/Lokasi</th><th>Jumlah</th><th>Nilai</th></tr></thead><tbody>${(d.locations||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.value)}</td></tr>`).join("")}</tbody></table></div></div>`;
-}
-function metric(a,b,c){return `<div class="card metric"><div class="label">${a}</div><div class="value">${b}</div><div class="sub">${c}</div></div>`}
+  $("teamBody").innerHTML = `
 
-async function renderMyInventory(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Alker Saya</h2><p class="muted">Inventory yang secara resmi menjadi tanggung jawab Anda.</p></div><div class="actions"><button class="btn primary" onclick="showInitialForm()">+ Input Alker Awal</button></div></div><div id="myInv"></div>`;
-  const r=await api("inventory",{scope:"mine"});renderInventoryTable($("myInv"),r.data,"mine");
-}
-function renderInventoryTable(el,data,scope){
-  el.innerHTML=`<div class="card" style="margin-bottom:15px"><div class="detail-grid">
-  <div class="detail-box"><span>Item</span><strong>${data.length}</strong></div>
-  <div class="detail-box"><span>Nilai</span><strong>${money(data.reduce((a,x)=>a+Number(x.price||0),0))}</strong></div>
-  <div class="detail-box"><span>Masalah</span><strong>${data.filter(x=>/RUSAK|HILANG/.test(x.condition||"")).length}</strong></div></div></div>
-  <div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Alker</th><th>Merk/Type</th><th>SN</th><th>Lokasi</th><th>Pemegang</th><th>Kondisi</th><th>Nilai</th><th></th></tr></thead><tbody>
-  ${data.map(x=>`<tr><td>${esc(x.inventoryId)}</td><td><strong>${esc(x.itemName)}</strong></td><td>${esc(x.brand)} / ${esc(x.type)}</td><td>${esc(x.serialNumber||"-")}</td><td>${esc(x.location)}</td><td>${esc(x.holder||"-")}</td><td>${badge(x.condition)}</td><td>${money(x.price)}</td><td><button class="btn secondary" onclick='showInventoryDetail(${JSON.stringify(x)})'>Detail</button></td></tr>`).join("")||'<tr><td colspan="9"><div class="empty">Belum ada inventory.</div></td></tr>'}
-  </tbody></table></div>`;
-}
-window.showInventoryDetail=x=>openModal("Detail Inventory",`<div class="detail-grid">${[['ID',x.inventoryId],['Alker',x.itemName],['Kategori',x.category],['Merk',x.brand],['Type',x.type],['Serial Number',x.serialNumber],['Lokasi',x.location],['Pemegang',x.holder],['Loker',x.loker],['Kondisi',x.condition],['Status',x.status],['Nilai',money(x.price)]].map(a=>`<div class="detail-box"><span>${esc(a[0])}</span><strong>${esc(a[1]||"-")}</strong></div>`).join("")}</div>${x.photoUrl?`<p><a href="${esc(x.photoUrl)}" target="_blank">Buka foto</a></p>`:""}<div class="actions"><button class="btn warning" onclick="closeModal();showIssueForm('${esc(x.inventoryId)}')">Lapor Masalah</button></div>`);
-async function renderInitialReport(){
-  $("page").innerHTML=`
-    <div class="page-head">
-      <div>
-        <h2>Laporan Alker</h2>
-        <p class="muted">Laporkan kondisi ALKER yang Anda pegang. Data awal akan diverifikasi Gudang sebelum menjadi inventory resmi.</p>
-      </div>
-      <div class="actions">
-        <button class="btn primary" onclick="showInitialForm()">+ Tambah Laporan</button>
-      </div>
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tim</th>
+            <th>Loker</th>
+            <th>Teknisi Utama</th>
+            <th>Partner</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            teams
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.teamId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ${esc(x.technicianName)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${
+                        esc(
+                          x.partnerName ||
+                          "-"
+                        )
+                      }
+                    </td>
+
+                    <td>
+                      ${badge("AKTIF")}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="5">
+
+                <div class="empty">
+                  Belum ada tim.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
     </div>
-    <div id="reportBody"></div>`;
-  try{
-    const r=await api("inventory",{scope:"mine"});
-    const issues=await api("issues",{scope:"mine"});
-    const items=r.data||[];
-    const problems=(issues.data||[]).filter(x=>/MENUNGGU|PROSES/.test(String(x.status||"")));
-    $("reportBody").innerHTML=`
-      <div class="grid cards">
-        ${metric("ALKER Tercatat",items.length,"tanggung jawab")}
-        ${metric("Kondisi Bermasalah",items.filter(x=>/RUSAK|HILANG/.test(String(x.condition||""))).length,"perlu perhatian")}
-        ${metric("Laporan Masalah",problems.length,"menunggu proses")}
+
+  `;
+}
+
+
+/*************************************************
+ * KELOLA TIM
+ *************************************************/
+
+async function renderTeamManage() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Kelola Tim Teknisi
+        </h2>
+
+        <p class="muted">
+          Atur Teknisi Utama dan Teknisi 2 /
+          Partner berdasarkan loker.
+        </p>
+
       </div>
-      <div style="height:15px"></div>
-      <div class="card">
-        <div class="section-head"><div><h3>ALKER Saya</h3><p class="muted">Gunakan tombol detail untuk melihat kondisi dan melaporkan masalah.</p></div></div>
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr><th>ALKER</th><th>Merk / Type</th><th>SN</th><th>Kondisi</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              ${items.map(x=>`<tr>
-                <td><strong>${esc(x.itemName)}</strong><div class="small muted">${esc(x.inventoryId)}</div></td>
-                <td>${esc(x.brand||"-")} / ${esc(x.type||"-")}</td>
-                <td>${esc(x.serialNumber||"-")}</td>
-                <td>${badge(x.condition)}</td>
-                <td>${badge(x.status)}</td>
-                <td><button class="btn secondary" onclick='showInventoryDetail(${JSON.stringify(x)})'>Detail / Lapor Kondisi</button></td>
-              </tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada ALKER yang disetujui Gudang.</div></td></tr>'}
-            </tbody>
-          </table>
+
+
+      <button
+        class="btn primary"
+        onclick="showTeamForm()"
+      >
+        + Buat Tim
+      </button>
+
+    </div>
+
+
+    <div id="teamManageBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "technicianTeam"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  const teams =
+    d.teams || [];
+
+
+  $("teamManageBody").innerHTML = `
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Tim",
+        teams.length,
+        "tim aktif"
+      )}
+
+      ${metric(
+        "Teknisi",
+        (d.technicians || []).length,
+        "teknisi aktif"
+      )}
+
+      ${metric(
+        "Dengan Partner",
+        teams.filter(
+          x => x.partnerId
+        ).length,
+        "tim"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tim</th>
+            <th>Loker</th>
+            <th>Teknisi Utama</th>
+            <th>Partner</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            teams
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      <strong>
+                        ${esc(x.teamId)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technicianName)}
+                    </td>
+
+                    <td>
+                      ${
+                        esc(
+                          x.partnerName ||
+                          "-"
+                        )
+                      }
+                    </td>
+
+                    <td>
+
+                      <div class="actions">
+
+                        <button
+                          class="btn secondary"
+                          onclick='editTeam(${JSON.stringify(x)})'
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          class="btn danger"
+                          onclick="disableTeam('${esc(x.teamId)}')"
+                        >
+                          Nonaktifkan
+                        </button>
+
+                      </div>
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="5">
+
+                <div class="empty">
+                  Belum ada tim.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * TEAM FORM
+ *************************************************/
+
+window.showTeamForm =
+  async () => {
+
+    await openTeamEditor();
+  };
+
+
+window.editTeam =
+  async team => {
+
+    await openTeamEditor(team);
+  };
+
+
+async function openTeamEditor(
+  existing = null
+) {
+
+  const r =
+    await api(
+      "technicianTeam"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  const technicians =
+    d.technicians || [];
+
+
+  /*
+   * Leader hanya mendapatkan
+   * teknisi lokernya.
+   *
+   * Admin/SPV semua teknisi.
+   */
+  const selectedLoker =
+    existing?.loker ||
+    session.loker ||
+    "";
+
+
+  const available =
+    technicians.filter(
+      x =>
+        x.loker === selectedLoker
+    );
+
+
+  openModal(
+
+    existing
+      ? "Edit Tim Teknisi"
+      : "Buat Tim Teknisi",
+
+    `
+
+      <form id="teamForm">
+
+        <div class="form-grid">
+
+
+          <label>
+
+            Loker
+
+            <select
+              name="loker"
+              id="teamLoker"
+              required
+            >
+
+              ${
+                session.role === "LEADER"
+                  ? `
+
+                    <option
+                      value="${esc(session.loker)}"
+                      selected
+                    >
+                      ${esc(session.loker)}
+                    </option>
+
+                  `
+                  : `
+
+                    ${
+                      [
+                        "IOAN / ASSURANCE",
+                        "PSB / FULFILLMENT",
+                        "MAINTENANCE / OSP"
+                      ]
+                        .map(
+                          x => `
+
+                            <option
+                              value="${esc(x)}"
+                              ${
+                                x ===
+                                selectedLoker
+                                  ? "selected"
+                                  : ""
+                              }
+                            >
+                              ${esc(x)}
+                            </option>
+
+                          `
+                        )
+                        .join("")
+                    }
+
+                  `
+              }
+
+            </select>
+
+          </label>
+
+
+          <label>
+
+            Teknisi Utama
+
+            <select
+              name="technicianId"
+              id="teamTechnician"
+              required
+            >
+
+              ${
+                available
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.userId)}"
+                        ${
+                          x.userId ===
+                          existing?.technicianId
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${esc(x.name)}
+                      </option>
+
+                    `
+                  )
+                  .join("")
+              }
+
+            </select>
+
+          </label>
+
+
+          <label>
+
+            Teknisi 2 / Partner
+
+            <select
+              name="partnerId"
+              id="teamPartner"
+            >
+
+              <option value="">
+                -- Tidak ada partner --
+              </option>
+
+              ${
+                available
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.userId)}"
+                        ${
+                          x.userId ===
+                          existing?.partnerId
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${esc(x.name)}
+                      </option>
+
+                    `
+                  )
+                  .join("")
+              }
+
+            </select>
+
+          </label>
+
+
         </div>
-      </div>`;
-  }catch(e){
-    $("reportBody").innerHTML=`<div class="card"><strong>Gagal memuat laporan</strong><p class="danger-text">${esc(e.message)}</p></div>`;
-  }
-}
-async function renderRequests(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Request Alker</h2><p class="muted">Request baru atau penggantian mengikuti alur validasi.</p></div><button class="btn primary" onclick="showRequestForm()">+ Request</button></div><div id="req"></div>`;
-  const r=await api("requests",{scope:"mine"});$("req").innerHTML=tableRequests(r.data);
-}
-function tableRequests(a){return `<div class="table-wrap"><table class="table"><thead><tr><th>Request</th><th>Teknisi</th><th>Alker</th><th>Jenis</th><th>Qty</th><th>Status</th><th>Tanggal</th><th></th></tr></thead><tbody>${a.map(x=>`<tr><td>${esc(x.requestId)}</td><td>${esc(x.technician)}</td><td>${esc(x.itemName)}</td><td>${esc(x.requestType)}</td><td>${x.qty}</td><td>${badge(x.status)}</td><td>${esc(x.date)}</td><td><button class="btn secondary" onclick='showRequestDetail(${JSON.stringify(x)})'>Detail</button></td></tr>`).join("")||'<tr><td colspan="8"><div class="empty">Belum ada request.</div></td></tr>'}</tbody></table></div>`}
-window.showRequestDetail=x=>openModal("Detail Request",`<div class="detail-grid">${[['Request',x.requestId],['Teknisi',x.technician],['Loker',x.loker],['Alker',x.itemName],['Jenis',x.requestType],['Qty',x.qty],['Status',x.status],['Tanggal',x.date]].map(a=>`<div class="detail-box"><span>${esc(a[0])}</span><strong>${esc(a[1])}</strong></div>`).join("")}</div><div class="card" style="margin-top:12px"><strong>Alasan</strong><p>${esc(x.reason||"-")}</p></div>`);
 
-window.showRequestForm=async()=>{
-  const r=await api("masters");
-  openModal("Request ALKER",`<form id="requestForm"><div class="form-grid">
-  <label>Alker<select name="itemId" required>${r.data.items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)} — ${esc(x.category)}</option>`).join("")}</select></label>
-  <label>Jenis Request<select name="requestType"><option>BARU</option><option>PENGGANTIAN</option></select></label>
-  <label>Qty<input name="qty" type="number" min="1" value="1" required></label>
-  <label>Prioritas<select name="priority"><option>NORMAL</option><option>TINGGI</option><option>MENDESAK</option></select></label>
-  <label class="full-col">Alasan<textarea name="reason" required></textarea></label>
-  <label class="full-col">Foto pendukung<input name="photo" type="file" accept="image/*" capture="environment"></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Kirim Request</button></div></form>`);
-  $("requestForm").onsubmit=async e=>{e.preventDefault();const f=e.target;const photo=await fileToBase64(f.photo.files[0]);try{await api("createRequest",{itemId:f.itemId.value,requestType:f.requestType.value,qty:f.qty.value,priority:f.priority.value,reason:f.reason.value,photo});closeModal();toast("Request berhasil dikirim");renderRequests()}catch(err){toast(err.message)}};
-};
 
-window.showInitialForm=async()=>{
-  const r=await api("masters");
-  openModal("Input Alker yang Saat Ini Dipegang",`<p class="muted">Data ini masuk verifikasi Gudang. Belum menjadi inventory resmi sampai disetujui.</p><form id="initialForm"><div class="form-grid">
-  <label>Alker<select name="itemId" required>${r.data.items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}</select></label>
-  <label>Merk<input name="brand"></label><label>Type<input name="type"></label><label>Serial Number<input name="serialNumber"></label>
-  <label>Kondisi<select name="condition"><option>BAIK</option><option>RUSAK RINGAN</option><option>RUSAK BERAT</option></select></label>
-  <label>Nilai/ Harga<input name="price" type="number" min="0"></label>
-  <label class="full-col">Keterangan<textarea name="note"></textarea></label>
-  <label>Foto Alker<input name="photo" type="file" accept="image/*" capture="environment"></label>
-  <label>Foto Serial/Label<input name="serialPhoto" type="file" accept="image/*" capture="environment"></label>
-  </div><div class="actions" style="margin-top:15px"><button class="btn primary">Submit Verifikasi</button></div></form>`);
-  $("initialForm").onsubmit=async e=>{e.preventDefault();const f=e.target;try{await api("initialSubmit",{itemId:f.itemId.value,brand:f.brand.value,type:f.type.value,serialNumber:f.serialNumber.value,condition:f.condition.value,price:f.price.value,note:f.note.value,photo:await fileToBase64(f.photo.files[0]),serialPhoto:await fileToBase64(f.serialPhoto.files[0])});closeModal();toast("Inventory dikirim ke Gudang");}catch(err){toast(err.message)}};
-};
+        <div
+          class="card"
+          style="margin-top:15px"
+        >
 
-async function renderIssues(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Rusak / Hilang</h2><p class="muted">Laporkan kondisi ALKER yang menjadi tanggung jawab Anda.</p></div></div><div id="issues"></div>`;
-  const r=await api("issues",{scope:"mine"});$("issues").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Inventory</th><th>Alker</th><th>Jenis</th><th>Keterangan</th><th>Status</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.inventoryId)}</td><td>${esc(x.itemName)}</td><td>${esc(x.issueType)}</td><td>${esc(x.note)}</td><td>${badge(x.status)}</td></tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada laporan.</div></td></tr>'}</tbody></table></div>`;
-}
-window.showIssueForm=async id=>{openModal("Lapor Rusak / Hilang",`<form id="issueForm"><div class="form-grid"><label>Inventory<input name="inventoryId" value="${esc(id)}" readonly></label><label>Jenis<select name="issueType"><option>RUSAK</option><option>HILANG</option></select></label><label class="full-col">Keterangan<textarea name="note" required></textarea></label><label class="full-col">Foto<input name="photo" type="file" accept="image/*" capture="environment"></label></div><div class="actions" style="margin-top:15px"><button class="btn danger">Kirim Laporan</button></div></form>`);$("issueForm").onsubmit=async e=>{e.preventDefault();const f=e.target;try{await api("reportIssue",{inventoryId:f.inventoryId.value,issueType:f.issueType.value,note:f.note.value,photo:await fileToBase64(f.photo.files[0])});closeModal();toast("Laporan dikirim");renderIssues()}catch(err){toast(err.message)}}};
+          <p class="muted">
 
-async function renderReturns(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Pengembalian</h2><p class="muted">Pengembalian membuat alat kembali ke kontrol Gudang setelah diverifikasi.</p></div></div><div id="returns"></div>`;
-  const r=await api("returns",{scope:"mine"});$("returns").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Inventory</th><th>Alker</th><th>Kondisi</th><th>Status</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.inventoryId)}</td><td>${esc(x.itemName)}</td><td>${badge(x.condition)}</td><td>${badge(x.status)}</td></tr>`).join("")||'<tr><td colspan="5"><div class="empty">Belum ada pengembalian.</div></td></tr>'}</tbody></table></div>`;
-}
-async function renderHistory(){const r=await api("history",{scope:"mine"});$("page").innerHTML=`<div class="page-head"><div><h2>Riwayat</h2><p class="muted">Jejak aktivitas yang terkait dengan akun Anda.</p></div></div><div class="card"><div class="timeline">${r.data.map(x=>`<div class="timeline-item"><strong>${esc(x.action)}</strong><div>${esc(x.description)}</div><div class="small muted">${esc(x.date)} • ${esc(x.actor)}</div></div>`).join("")||'<div class="empty">Belum ada histori.</div>'}</div></div>`}
+            Partner harus berasal dari
+            loker/divisi yang sama.
+            Satu teknisi tidak boleh
+            berada pada dua tim aktif.
 
-async function renderTeam(){
-  $("page").innerHTML=`<div class="page-head"><div><h2>Teknisi Loker</h2><p class="muted">${esc(session.loker)}</p></div></div><div id="team"></div>`;
-  const r=await api("technicians",{scope:"loker"});$("team").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Teknisi</th><th>Loker</th><th>Inventory</th><th>Nilai</th><th>Masalah</th></tr></thead><tbody>${r.data.map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.loker)}</td><td>${x.count}</td><td>${money(x.value)}</td><td>${x.issues}</td></tr>`).join("")}</tbody></table></div>`;
-}
-async function renderTeamInventory(){const r=await api("inventory",{scope:"loker"});$("page").innerHTML=`<div class="page-head"><div><h2>Inventory Loker</h2><p class="muted">${esc(session.loker)}</p></div></div><div id="teamInv"></div>`;renderInventoryTable($("teamInv"),r.data,"loker")}
-async function renderTeamRequests(){const r=await api("requests",{scope:"loker"});$("page").innerHTML=`<div class="page-head"><div><h2>Validasi Request</h2><p class="muted">Validasi kebutuhan teknisi sebelum diteruskan ke Gudang.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Request</th><th>Teknisi</th><th>Alker</th><th>Jenis</th><th>Qty</th><th>Status</th><th></th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.requestId)}</td><td>${esc(x.technician)}</td><td>${esc(x.itemName)}</td><td>${esc(x.requestType)}</td><td>${x.qty}</td><td>${badge(x.status)}</td><td>${/MENUNGGU VALIDASI/.test(x.status)?`<button class="btn success" onclick="approveRequest('${esc(x.requestId)}')">Approve</button> <button class="btn danger" onclick="rejectRequest('${esc(x.requestId)}')">Tolak</button>`:""}</td></tr>`).join("")}</tbody></table></div>`}
-window.approveRequest=async id=>{try{await api("requestDecision",{requestId:id,decision:"APPROVE"});toast("Request disetujui");renderTeamRequests()}catch(e){toast(e.message)}}
-window.rejectRequest=async id=>{const note=prompt("Alasan penolakan:");if(note===null)return;try{await api("requestDecision",{requestId:id,decision:"REJECT",note});toast("Request ditolak");renderTeamRequests()}catch(e){toast(e.message)}}
+          </p>
 
-async function renderWarehouse(){
-  const r=await api("warehouse");$("page").innerHTML=`<div class="page-head"><div><h2>Stok Gudang</h2><p class="muted">Stok aktual yang berada di lokasi GUDANG.</p></div><button class="btn primary" onclick="showReceivingForm()">+ Barang Masuk</button></div><div class="grid cards">${metric("Item Gudang",r.summary.count,"unit")}${metric("Nilai Stok",money(r.summary.value),"inventory")}${metric("Request",r.summary.requests,"menunggu")}${metric("Pengadaan",r.summary.procurement,"aktif")}</div><div style="height:15px"></div><div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Alker</th><th>Merk/Type</th><th>SN</th><th>Kondisi</th><th>Status</th><th>Nilai</th></tr></thead><tbody>${r.items.map(x=>`<tr><td>${esc(x.inventoryId)}</td><td>${esc(x.itemName)}</td><td>${esc(x.brand)} / ${esc(x.type)}</td><td>${esc(x.serialNumber||"-")}</td><td>${badge(x.condition)}</td><td>${badge(x.status)}</td><td>${money(x.price)}</td></tr>`).join("")||'<tr><td colspan="7"><div class="empty">Stok kosong.</div></td></tr>'}</tbody></table></div>`}
-async function renderInitial(){const r=await api("initialPending");$("page").innerHTML=`<div class="page-head"><div><h2>Verifikasi Inventory Awal</h2><p class="muted">Periksa ALKER yang dilaporkan teknisi sebelum menjadi inventory resmi.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Teknisi</th><th>Loker</th><th>Alker</th><th>SN</th><th>Kondisi</th><th>Tanggal</th><th></th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.technician)}</td><td>${esc(x.loker)}</td><td>${esc(x.itemName)}</td><td>${esc(x.serialNumber||"-")}</td><td>${badge(x.condition)}</td><td>${esc(x.date)}</td><td><button class="btn success" onclick="initialDecision('${esc(x.initialId)}','APPROVE')">Approve</button> <button class="btn warning" onclick="initialDecision('${esc(x.initialId)}','REVISION')">Revisi</button></td></tr>`).join("")||'<tr><td colspan="7"><div class="empty">Tidak ada yang menunggu.</div></td></tr>'}</tbody></table></div>`}
-window.initialDecision=async(id,decision)=>{let note="";if(decision==="REVISION"){note=prompt("Catatan revisi:")||"";if(!note)return}try{await api("initialDecision",{initialId:id,decision,note});toast("Berhasil diproses");renderInitial()}catch(e){toast(e.message)}}
-async function renderReceiving(){const r=await api("receiving");$("page").innerHTML=`<div class="page-head"><div><h2>Barang Masuk Gudang</h2><p class="muted">Setiap barang baru yang diterima menjadi transaksi inventory resmi.</p></div><button class="btn primary" onclick="showReceivingForm()">+ Catat Barang Masuk</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Transaksi</th><th>Alker</th><th>Qty</th><th>Supplier</th><th>Tanggal</th><th>Status</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.receivingId)}</td><td>${esc(x.itemName)}</td><td>${x.qty}</td><td>${esc(x.supplier)}</td><td>${esc(x.date)}</td><td>${badge(x.status)}</td></tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada penerimaan.</div></td></tr>'}</tbody></table></div>`}
-window.showReceivingForm=async()=>{const r=await api("masters");openModal("Catat Barang Baru Masuk Gudang",`<form id="receivingForm"><div class="form-grid"><label>Alker<select name="itemId">${r.data.items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}</select></label><label>Qty<input name="qty" type="number" min="1" value="1"></label><label>Merk<input name="brand"></label><label>Type<input name="type"></label><label>Serial Number<input name="serialNumber"></label><label>Harga per Unit<input name="price" type="number" min="0"></label><label>Supplier<input name="supplier"></label><label>No. PO/Invoice<input name="reference"></label><label class="full-col">Keterangan<textarea name="note"></textarea></label><label>Foto Barang<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Foto Invoice/Surat Jalan<input name="docPhoto" type="file" accept="image/*" capture="environment"></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Simpan & Masuk Gudang</button></div></form>`);$("receivingForm").onsubmit=async e=>{e.preventDefault();const f=e.target;try{await api("receive",{itemId:f.itemId.value,qty:f.qty.value,brand:f.brand.value,type:f.type.value,serialNumber:f.serialNumber.value,price:f.price.value,supplier:f.supplier.value,reference:f.reference.value,note:f.note.value,photo:await fileToBase64(f.photo.files[0]),docPhoto:await fileToBase64(f.docPhoto.files[0])});closeModal();toast("Barang masuk dan stok bertambah");renderReceiving()}catch(err){toast(err.message)}}}
+        </div>
 
-async function renderDistribution(){const r=await api("distribution");$("page").innerHTML=`<div class="page-head"><div><h2>Distribusi</h2><p class="muted">Pencatatan barang keluar dari Gudang menuju teknisi/loker.</p></div><button class="btn primary" onclick="showDistributionForm()">+ Distribusi</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Transaksi</th><th>Alker</th><th>Tujuan</th><th>Pemegang</th><th>Tanggal</th><th>Status</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.distributionId)}</td><td>${esc(x.itemName)}</td><td>${esc(x.loker)}</td><td>${esc(x.holder)}</td><td>${esc(x.date)}</td><td>${badge(x.status)}</td></tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada distribusi.</div></td></tr>'}</tbody></table></div>`}
-window.showDistributionForm=async()=>{const [m,w,t]=await Promise.all([api("masters"),api("warehouse"),api("technicians",{scope:"all"})]);openModal("Distribusi Alker",`<form id="distributionForm"><div class="form-grid"><label>Inventory Gudang<select name="inventoryId">${w.items.map(x=>`<option value="${esc(x.inventoryId)}">${esc(x.inventoryId)} — ${esc(x.itemName)} ${esc(x.serialNumber||"")}</option>`).join("")}</select></label><label>Teknisi<select name="technician">${t.data.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.loker)}</option>`).join("")}</select></label><label>Kondisi saat diserahkan<select name="condition"><option>BAIK</option><option>RUSAK RINGAN</option></select></label><label class="full-col">Catatan<textarea name="note"></textarea></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Distribusikan</button></div></form>`);$("distributionForm").onsubmit=async e=>{e.preventDefault();const f=e.target;try{await api("distribute",{inventoryId:f.inventoryId.value,technicianId:f.technician.value,condition:f.condition.value,note:f.note.value});closeModal();toast("Distribusi berhasil dicatat");renderDistribution()}catch(err){toast(err.message)}}}
 
-async function renderProcurement(){const r=await api("procurement");$("page").innerHTML=`<div class="page-head"><div><h2>Pengadaan</h2><p class="muted">Jika stok tidak cukup, kebutuhan dapat diproses sebagai pengadaan.</p></div><button class="btn primary" onclick="showProcurementForm()">+ Pengajuan Pembelian</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Pengadaan</th><th>Alker</th><th>Qty</th><th>Estimasi</th><th>Status</th><th>Tanggal</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.procurementId)}</td><td>${esc(x.itemName)}</td><td>${x.qty}</td><td>${money(x.estimate)}</td><td>${badge(x.status)}</td><td>${esc(x.date)}</td></tr>`).join("")||'<tr><td colspan="6"><div class="empty">Belum ada pengadaan.</div></td></tr>'}</tbody></table></div>`}
-window.showProcurementForm=async()=>{const r=await api("masters");openModal("Pengajuan Pembelian",`<form id="procForm"><div class="form-grid"><label>Alker<select name="itemId">${r.data.items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}</select></label><label>Qty<input name="qty" type="number" min="1" value="1"></label><label>Estimasi harga/unit<input name="estimate" type="number" min="0"></label><label>Prioritas<select name="priority"><option>NORMAL</option><option>TINGGI</option><option>MENDESAK</option></select></label><label class="full-col">Alasan<textarea name="reason" required></textarea></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Ajukan</button></div></form>`);$("procForm").onsubmit=async e=>{e.preventDefault();const f=e.target;try{await api("createProcurement",{itemId:f.itemId.value,qty:f.qty.value,estimate:f.estimate.value,priority:f.priority.value,reason:f.reason.value});closeModal();toast("Pengadaan diajukan");renderProcurement()}catch(err){toast(err.message)}}}
+        <div
+          class="actions"
+          style="margin-top:15px"
+        >
 
-async function renderAllInventory(){const r=await api("inventory",{scope:"all"});$("page").innerHTML=`<div class="page-head"><div><h2>Seluruh Inventory</h2><p class="muted">Pusat pencarian posisi seluruh ALKER/SALKER.</p></div></div><div class="toolbar"><input id="invSearch" placeholder="Cari ID, nama, SN, teknisi..."></div><div id="allInv"></div>`;let a=r.data;const draw=()=>{const q=$("invSearch").value.toLowerCase();renderInventoryTable($("allInv"),a.filter(x=>JSON.stringify(x).toLowerCase().includes(q)),"all")};$("invSearch").oninput=draw;draw()}
-async function renderMaster(){const r=await api("masters");$("page").innerHTML=`<div class="page-head"><div><h2>Master Data</h2><p class="muted">Daftar loker dan master ALKER. Tambah item baru dapat dilakukan dari sini.</p></div><button class="btn primary" onclick="showMasterForm()">+ Tambah ALKER</button></div><div class="grid two"><div class="card"><h3>Loker</h3>${r.data.lokers.map(x=>`<div class="kpi-line"><span>${esc(x.name)}</span>${badge(x.status||"AKTIF")}</div>`).join("")}</div><div class="card"><h3>Master ALKER (${r.data.items.length})</h3>${r.data.items.slice(0,40).map(x=>`<div class="kpi-line"><span>${esc(x.itemName)}<small class="muted"> ${esc(x.category)}</small></span><span>${esc(x.lokers||"-")}</span></div>`).join("")}</div></div>`}
-window.showMasterForm=async()=>{const r=await api("masters");openModal("Tambah Master ALKER",`<form id="masterForm"><div class="form-grid"><label>Nama ALKER<input name="itemName" required></label><label>Kategori<input name="category" required></label><label>Satuan<input name="unit" value="UNIT"></label><label>Harga standar<input name="price" type="number" min="0"></label><label class="full-col">Loker pengguna<select name="loker" multiple size="5">${r.data.lokers.filter(x=>x.name!=="GUDANG").map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select></label><label class="full-col">Merk/Spesifikasi<textarea name="spec"></textarea></label></div><div class="actions" style="margin-top:15px"><button class="btn primary">Simpan</button></div></form>`);$("masterForm").onsubmit=async e=>{e.preventDefault();const f=e.target;const lokers=[...f.loker.selectedOptions].map(o=>o.value).join("|");try{await api("addMasterItem",{itemName:f.itemName.value,category:f.category.value,unit:f.unit.value,price:f.price.value,lokers,spec:f.spec.value});closeModal();toast("Master ALKER ditambahkan");renderMaster()}catch(err){toast(err.message)}}}
-async function renderAudit(){const r=await api("audit");$("page").innerHTML=`<div class="page-head"><div><h2>Audit Trail</h2><p class="muted">Catatan aktivitas sistem.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Actor</th><th>Action</th><th>Deskripsi</th></tr></thead><tbody>${r.data.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.description)}</td></tr>`).join("")||'<tr><td colspan="4"><div class="empty">Belum ada audit.</div></td></tr>'}</tbody></table></div>`}
-(async()=>{
-  try{
-    const s=JSON.parse(localStorage.getItem("alker_session")||"null");
-    if(!s || !s.token) return;
-    session=s;
-    const v=await api("me");
-    session=v.data?.session || v.session || session;
-    if(session && session.token){
-      localStorage.setItem("alker_session",JSON.stringify(session));
-      await initApp();
+          <button
+            type="button"
+            class="btn secondary"
+            onclick="closeModal()"
+          >
+            Batal
+          </button>
+
+
+          <button
+            type="submit"
+            class="btn primary"
+          >
+            ${
+              existing
+                ? "Simpan Perubahan"
+                : "Simpan Tim"
+            }
+          </button>
+
+        </div>
+
+
+      </form>
+
+    `
+  );
+
+
+  const lokerSelect =
+    $("teamLoker");
+
+  const techSelect =
+    $("teamTechnician");
+
+  const partnerSelect =
+    $("teamPartner");
+
+
+  async function reloadTechnicians() {
+
+    const selectedTech =
+      techSelect.value;
+
+
+    const selectedPartner =
+      partnerSelect.value;
+
+
+    /*
+     * API team memberikan
+     * semua teknisi untuk role
+     * yang sedang login.
+     */
+    const fresh =
+      await api(
+        "technicianTeam"
+      );
+
+
+    const list =
+      (fresh.data?.technicians || [])
+        .filter(
+          x =>
+            x.loker ===
+            lokerSelect.value
+        );
+
+
+    techSelect.innerHTML =
+      list
+        .map(
+          x => `
+
+            <option
+              value="${esc(x.userId)}"
+            >
+              ${esc(x.name)}
+            </option>
+
+          `
+        )
+        .join("");
+
+
+    partnerSelect.innerHTML = `
+
+      <option value="">
+        -- Tidak ada partner --
+      </option>
+
+      ${
+        list
+          .map(
+            x => `
+
+              <option
+                value="${esc(x.userId)}"
+              >
+                ${esc(x.name)}
+              </option>
+
+            `
+          )
+          .join("")
+      }
+
+    `;
+
+
+    if (
+      list.some(
+        x =>
+          x.userId ===
+          selectedTech
+      )
+    ) {
+      techSelect.value =
+        selectedTech;
     }
-  }catch(e){
-    console.error("Restore session gagal:",e);
-    localStorage.removeItem("alker_session");
-    session=null;
+
+
+    if (
+      list.some(
+        x =>
+          x.userId ===
+          selectedPartner
+      )
+    ) {
+      partnerSelect.value =
+        selectedPartner;
+    }
   }
+
+
+  lokerSelect.onchange =
+    async () => {
+
+      await reloadTechnicians();
+
+    };
+
+
+  techSelect.onchange =
+    () => {
+
+      if (
+        partnerSelect.value ===
+        techSelect.value
+      ) {
+        partnerSelect.value = "";
+      }
+
+      [
+        ...partnerSelect.options
+      ].forEach(
+        option => {
+
+          option.disabled =
+            option.value &&
+            option.value ===
+              techSelect.value;
+
+        }
+      );
+
+    };
+
+
+  /*
+   * Initial disable self
+   */
+  techSelect.onchange();
+
+
+  $("teamForm").onsubmit =
+    async e => {
+
+      e.preventDefault();
+
+
+      const technicianId =
+        techSelect.value;
+
+
+      const partnerId =
+        partnerSelect.value;
+
+
+      if (
+        partnerId &&
+        partnerId ===
+          technicianId
+      ) {
+
+        toast(
+          "Teknisi utama dan partner tidak boleh sama."
+        );
+
+        return;
+      }
+
+
+      try {
+
+        await api(
+          "saveTechnicianTeam",
+          {
+
+            teamId:
+              existing?.teamId || "",
+
+            technicianId,
+
+            partnerId
+          }
+        );
+
+
+        closeModal();
+
+        toast(
+          existing
+            ? "Tim berhasil diperbarui."
+            : "Tim berhasil dibuat."
+        );
+
+
+        renderTeamManage();
+
+      } catch (err) {
+
+        toast(err.message);
+
+      }
+
+    };
+}
+
+
+window.disableTeam =
+  async teamId => {
+
+    if (
+      !confirm(
+        "Nonaktifkan tim ini?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await api(
+        "deleteTechnicianTeam",
+        {
+          teamId
+        }
+      );
+
+
+      toast(
+        "Tim berhasil dinonaktifkan."
+      );
+
+
+      renderTeamManage();
+
+    } catch (err) {
+
+      toast(err.message);
+
+    }
+  };
+
+
+/*************************************************
+ * LEADER TEAM
+ *************************************************/
+
+async function renderTeamInventory() {
+
+  const r =
+    await api(
+      "inventory",
+      {
+        scope: "loker"
+      }
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Inventory Loker
+        </h2>
+
+        <p class="muted">
+          ${esc(session.loker)}
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="teamInv">
+    </div>
+
+  `;
+
+
+  renderInventoryTable(
+    $("teamInv"),
+    r.data || [],
+    "loker"
+  );
+}
+
+
+async function renderTeamRequests() {
+
+  const r =
+    await api(
+      "requests",
+      {
+        scope: "loker"
+      }
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Validasi Request
+        </h2>
+
+        <p class="muted">
+          Validasi kebutuhan teknisi
+          sebelum diteruskan ke Gudang.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Request</th>
+            <th>Teknisi</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.requestId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.requestType)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+
+                      ${
+                        /MENUNGGU VALIDASI/.test(
+                          x.status || ""
+                        )
+                          ? `
+
+                            <button
+                              class="btn success"
+                              onclick="
+                                approveRequest(
+                                  '${esc(x.requestId)}'
+                                )
+                              "
+                            >
+                              Approve
+                            </button>
+
+                            <button
+                              class="btn danger"
+                              onclick="
+                                rejectRequest(
+                                  '${esc(x.requestId)}'
+                                )
+                              "
+                            >
+                              Tolak
+                            </button>
+
+                          `
+                          : ""
+                      }
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="7">
+
+                <div class="empty">
+                  Tidak ada request.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.approveRequest =
+  async id => {
+
+    try {
+
+      await api(
+        "requestDecision",
+        {
+          requestId: id,
+          decision: "APPROVE"
+        }
+      );
+
+
+      toast(
+        "Request disetujui."
+      );
+
+
+      renderTeamRequests();
+
+    } catch (e) {
+
+      toast(e.message);
+
+    }
+  };
+
+
+window.rejectRequest =
+  async id => {
+
+    const note =
+      prompt(
+        "Alasan penolakan:"
+      );
+
+
+    if (note === null)
+      return;
+
+
+    try {
+
+      await api(
+        "requestDecision",
+        {
+          requestId: id,
+          decision: "REJECT",
+          note
+        }
+      );
+
+
+      toast(
+        "Request ditolak."
+      );
+
+
+      renderTeamRequests();
+
+    } catch (e) {
+
+      toast(e.message);
+
+    }
+  };
+
+
+/*************************************************
+ * GUDANG
+ *************************************************/
+
+async function renderWarehouse() {
+
+  const r =
+    await api(
+      "warehouse"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Stok Gudang
+        </h2>
+
+        <p class="muted">
+          Stok aktual yang berada
+          di lokasi GUDANG.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showReceivingForm()"
+      >
+        + Barang Masuk
+      </button>
+
+    </div>
+
+
+    <div class="grid cards">
+
+      ${metric(
+        "Item Gudang",
+        r.data.summary.count,
+        "unit"
+      )}
+
+      ${metric(
+        "Nilai Stok",
+        money(
+          r.data.summary.value
+        ),
+        "inventory"
+      )}
+
+      ${metric(
+        "Request",
+        r.data.summary.requests,
+        "menunggu"
+      )}
+
+      ${metric(
+        "Pengadaan",
+        r.data.summary.procurement,
+        "aktif"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    ${warehouseTable(
+      r.data.items || []
+    )}
+
+  `;
+}
+
+
+function warehouseTable(items) {
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ID</th>
+            <th>Alker</th>
+            <th>Merk/Type</th>
+            <th>SN</th>
+            <th>Kondisi</th>
+            <th>Status</th>
+            <th>Nilai</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            items
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.brand || "-")}
+                      /
+                      ${esc(x.type || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.serialNumber || "-")}
+                    </td>
+
+                    <td>
+                      ${badge(x.condition)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+                      ${money(x.price)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="7">
+
+                <div class="empty">
+                  Stok kosong.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * VERIFIKASI INVENTORY AWAL
+ *************************************************/
+
+async function renderInitial() {
+
+  const r =
+    await api(
+      "initialPending"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Verifikasi Inventory Awal
+        </h2>
+
+        <p class="muted">
+          Periksa ALKER yang dilaporkan
+          teknisi sebelum menjadi inventory resmi.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Teknisi</th>
+            <th>Loker</th>
+            <th>Alker</th>
+            <th>SN</th>
+            <th>Kondisi</th>
+            <th>Tanggal</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.serialNumber || "-")}
+                    </td>
+
+                    <td>
+                      ${badge(x.condition)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn success"
+                        onclick="
+                          initialDecision(
+                            '${esc(x.initialId)}',
+                            'APPROVE'
+                          )
+                        "
+                      >
+                        Approve
+                      </button>
+
+
+                      <button
+                        class="btn warning"
+                        onclick="
+                          initialDecision(
+                            '${esc(x.initialId)}',
+                            'REVISION'
+                          )
+                        "
+                      >
+                        Revisi
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="7">
+
+                <div class="empty">
+                  Tidak ada yang menunggu.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.initialDecision =
+  async (
+    id,
+    decision
+  ) => {
+
+    let note = "";
+
+
+    if (
+      decision ===
+      "REVISION"
+    ) {
+
+      note =
+        prompt(
+          "Catatan revisi:"
+        ) || "";
+
+
+      if (!note)
+        return;
+    }
+
+
+    try {
+
+      await api(
+        "initialDecision",
+        {
+          initialId: id,
+          decision,
+          note
+        }
+      );
+
+
+      toast(
+        "Berhasil diproses."
+      );
+
+
+      renderInitial();
+
+    } catch (e) {
+
+      toast(e.message);
+
+    }
+  };
+
+
+/*************************************************
+ * BARANG MASUK
+ *************************************************/
+
+async function renderReceiving() {
+
+  const r =
+    await api(
+      "receiving"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Barang Masuk Gudang
+        </h2>
+
+        <p class="muted">
+          Setiap barang baru yang diterima
+          menjadi inventory resmi.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showReceivingForm()"
+      >
+        + Catat Barang Masuk
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Transaksi</th>
+            <th>Alker</th>
+            <th>Qty</th>
+            <th>Supplier</th>
+            <th>Tanggal</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.receivingId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${esc(x.supplier)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada penerimaan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showReceivingForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    openModal(
+
+      "Catat Barang Baru Masuk Gudang",
+
+      `
+
+        <form id="receivingForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${
+                  (
+                    r.data?.items ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.itemId)}"
+                        >
+                          ${esc(x.itemName)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Merk
+
+              <input
+                name="brand"
+              >
+
+            </label>
+
+
+            <label>
+
+              Type
+
+              <input
+                name="type"
+              >
+
+            </label>
+
+
+            <label>
+
+              Serial Number
+
+              <input
+                name="serialNumber"
+              >
+
+            </label>
+
+
+            <label>
+
+              Harga per Unit
+
+              <input
+                name="price"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label>
+
+              Supplier
+
+              <input
+                name="supplier"
+              >
+
+            </label>
+
+
+            <label>
+
+              No. PO / Invoice
+
+              <input
+                name="reference"
+              >
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+              ></textarea>
+
+            </label>
+
+
+            <label>
+
+              Foto Barang
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+            <label>
+
+              Foto Invoice / Surat Jalan
+
+              <input
+                name="docPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Simpan & Masuk Gudang
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("receivingForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "receive",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              qty:
+                f.qty.value,
+
+              brand:
+                f.brand.value,
+
+              type:
+                f.type.value,
+
+              serialNumber:
+                f.serialNumber.value,
+
+              price:
+                f.price.value,
+
+              supplier:
+                f.supplier.value,
+
+              reference:
+                f.reference.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                ),
+
+              docPhoto:
+                await fileToBase64(
+                  f.docPhoto.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Barang masuk dan stok bertambah."
+          );
+
+
+          renderReceiving();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * DISTRIBUSI
+ *************************************************/
+
+async function renderDistribution() {
+
+  const r =
+    await api(
+      "distribution"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Distribusi
+        </h2>
+
+        <p class="muted">
+          Pencatatan barang keluar
+          dari Gudang menuju teknisi.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showDistributionForm()"
+      >
+        + Distribusi
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Transaksi</th>
+            <th>Alker</th>
+            <th>Tujuan</th>
+            <th>Pemegang</th>
+            <th>Tanggal</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.distributionId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada distribusi.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showDistributionForm =
+  async () => {
+
+    const [
+      m,
+      w,
+      t
+    ] =
+      await Promise.all([
+
+        api("masters"),
+
+        api("warehouse"),
+
+        api(
+          "technicians",
+          {scope: "all"}
+        )
+
+      ]);
+
+
+    openModal(
+
+      "Distribusi Alker",
+
+      `
+
+        <form id="distributionForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Inventory Gudang
+
+              <select
+                name="inventoryId"
+                required
+              >
+
+                ${
+                  (
+                    w.data?.items ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.inventoryId)}"
+                        >
+
+                          ${esc(x.inventoryId)}
+                          —
+                          ${esc(x.itemName)}
+                          ${esc(
+                            x.serialNumber
+                              ? " • " +
+                                x.serialNumber
+                              : ""
+                          )}
+
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Teknisi
+
+              <select
+                name="technician"
+                required
+              >
+
+                ${
+                  (
+                    t.data ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.id)}"
+                        >
+                          ${esc(x.name)}
+                          —
+                          ${esc(x.loker)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Kondisi Saat Diserahkan
+
+              <select
+                name="condition"
+              >
+
+                <option>
+                  BAIK
+                </option>
+
+                <option>
+                  RUSAK RINGAN
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Catatan
+
+              <textarea
+                name="note"
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Distribusikan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("distributionForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "distribute",
+            {
+
+              inventoryId:
+                f.inventoryId.value,
+
+              technicianId:
+                f.technician.value,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Distribusi berhasil dicatat."
+          );
+
+
+          renderDistribution();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * PENGADAAN
+ *************************************************/
+
+async function renderProcurement() {
+
+  const r =
+    await api(
+      "procurement"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Pengadaan
+        </h2>
+
+        <p class="muted">
+          Kebutuhan pembelian ALKER
+          dan SALKER.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showProcurementForm()"
+      >
+        + Pengajuan Pembelian
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Pengadaan</th>
+            <th>Alker</th>
+            <th>Qty</th>
+            <th>Estimasi</th>
+            <th>Status</th>
+            <th>Tanggal</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.procurementId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${money(x.estimate)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada pengadaan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showProcurementForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    openModal(
+
+      "Pengajuan Pembelian",
+
+      `
+
+        <form id="procForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${
+                  (
+                    r.data?.items ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.itemId)}"
+                        >
+                          ${esc(x.itemName)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+              >
+
+            </label>
+
+
+            <label>
+
+              Estimasi Harga / Unit
+
+              <input
+                name="estimate"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label>
+
+              Prioritas
+
+              <select
+                name="priority"
+              >
+
+                <option>
+                  NORMAL
+                </option>
+
+                <option>
+                  TINGGI
+                </option>
+
+                <option>
+                  MENDESAK
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Alasan
+
+              <textarea
+                name="reason"
+                required
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Ajukan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("procForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "createProcurement",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              qty:
+                f.qty.value,
+
+              estimate:
+                f.estimate.value,
+
+              priority:
+                f.priority.value,
+
+              reason:
+                f.reason.value
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Pengadaan diajukan."
+          );
+
+
+          renderProcurement();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * SELURUH INVENTORY
+ *************************************************/
+
+async function renderAllInventory() {
+
+  const r =
+    await api(
+      "inventory",
+      {
+        scope: "all"
+      }
+    );
+
+
+  const all =
+    r.data || [];
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Seluruh Inventory
+        </h2>
+
+        <p class="muted">
+          Pusat pencarian posisi seluruh
+          ALKER / SALKER.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="toolbar">
+
+      <input
+        id="invSearch"
+        placeholder="Cari ID, nama, SN, teknisi..."
+      >
+
+    </div>
+
+
+    <div id="allInv">
+    </div>
+
+  `;
+
+
+  const draw =
+    () => {
+
+      const q =
+        (
+          $("invSearch")
+            .value ||
+          ""
+        ).toLowerCase();
+
+
+      const filtered =
+        all.filter(
+          x =>
+            JSON.stringify(x)
+              .toLowerCase()
+              .includes(q)
+        );
+
+
+      renderInventoryTable(
+        $("allInv"),
+        filtered,
+        "all"
+      );
+    };
+
+
+  $("invSearch").oninput =
+    draw;
+
+
+  draw();
+}
+
+
+/*************************************************
+ * MASTER DATA
+ *************************************************/
+
+async function renderMaster() {
+
+  const r =
+    await api(
+      "masters"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Master Data
+        </h2>
+
+        <p class="muted">
+          Daftar loker dan master ALKER.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showMasterForm()"
+      >
+        + Tambah ALKER
+      </button>
+
+    </div>
+
+
+    <div class="grid two">
+
+
+      <div class="card">
+
+        <h3>
+          Loker
+        </h3>
+
+
+        ${
+          (d.lokers || [])
+            .map(
+              x => `
+
+                <div class="kpi-line">
+
+                  <span>
+                    ${esc(x.name)}
+                  </span>
+
+                  ${badge(
+                    x.status ||
+                    "AKTIF"
+                  )}
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `<div class="empty">
+            Belum ada loker.
+          </div>`
+        }
+
+      </div>
+
+
+      <div class="card">
+
+        <h3>
+          Master ALKER
+          (${(d.items || []).length})
+        </h3>
+
+
+        ${
+          (d.items || [])
+            .slice(0, 50)
+            .map(
+              x => `
+
+                <div class="kpi-line">
+
+                  <span>
+
+                    ${esc(x.itemName)}
+
+                    <small class="muted">
+                      ${esc(x.category)}
+                    </small>
+
+                  </span>
+
+                  <span>
+                    ${esc(x.lokers || "-")}
+                  </span>
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `<div class="empty">
+            Belum ada master ALKER.
+          </div>`
+        }
+
+      </div>
+
+
+    </div>
+
+  `;
+}
+
+
+window.showMasterForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    const lokers =
+      (
+        r.data?.lokers ||
+        []
+      ).filter(
+        x =>
+          x.name !==
+          "GUDANG"
+      );
+
+
+    openModal(
+
+      "Tambah Master ALKER",
+
+      `
+
+        <form id="masterForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Nama ALKER
+
+              <input
+                name="itemName"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Kategori
+
+              <input
+                name="category"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Satuan
+
+              <input
+                name="unit"
+                value="UNIT"
+              >
+
+            </label>
+
+
+            <label>
+
+              Harga Standar
+
+              <input
+                name="price"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label class="full-col">
+
+              Loker Pengguna
+
+              <select
+                name="loker"
+                multiple
+                size="5"
+              >
+
+                ${
+                  lokers
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.name)}"
+                        >
+                          ${esc(x.name)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Merk / Spesifikasi
+
+              <textarea
+                name="spec"
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Simpan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("masterForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        const selectedLokers =
+          [
+            ...f.loker.selectedOptions
+          ]
+            .map(
+              o => o.value
+            )
+            .join("|");
+
+
+        try {
+
+          await api(
+            "addMasterItem",
+            {
+
+              itemName:
+                f.itemName.value,
+
+              category:
+                f.category.value,
+
+              unit:
+                f.unit.value,
+
+              price:
+                f.price.value,
+
+              lokers:
+                selectedLokers,
+
+              spec:
+                f.spec.value
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Master ALKER ditambahkan."
+          );
+
+
+          renderMaster();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * AUDIT
+ *************************************************/
+
+async function renderAudit() {
+
+  const r =
+    await api(
+      "audit"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Audit Trail
+        </h2>
+
+        <p class="muted">
+          Catatan aktivitas sistem.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Deskripsi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${esc(x.actor)}
+                    </td>
+
+                    <td>
+                      ${esc(x.action)}
+                    </td>
+
+                    <td>
+                      ${esc(x.description)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="4">
+
+                <div class="empty">
+                  Belum ada audit.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * SESSION RESTORE
+ *************************************************/
+
+(async () => {
+
+  try {
+
+    const saved =
+      JSON.parse(
+        localStorage.getItem(
+          "alker_session"
+        ) || "null"
+      );
+
+
+    if (!saved) {
+
+      return;
+
+    }
+
+
+    session =
+      saved;
+
+
+    /*
+     * Cek session ke server.
+     */
+    const v =
+      await api(
+        "me"
+      );
+
+
+    if (
+      v.ok &&
+      v.data?.session
+    ) {
+
+      session =
+        v.data.session;
+
+
+      localStorage.setItem(
+        "alker_session",
+        JSON.stringify(session)
+      );
+
+
+      await initApp();
+
+    }
+
+  } catch (e) {
+
+    console.warn(
+      "Session lama tidak valid:",
+      e.message
+    );
+
+
+    localStorage.removeItem(
+      "alker_session"
+    );
+
+    session = null;
+
+  }
+
 })();
