@@ -1,6 +1,6 @@
 /*************************************************
  * ALKER CONTROL
- * CHECKPOINT 3.2B
+ * CHECKPOINT 3.2C
  * FRONTEND
  *************************************************/
 
@@ -85,6 +85,34 @@ async function api(action, data = {}) {
   }
 
   const json = await res.json();
+
+  /*
+   * CHECKPOINT 3.2C
+   * technicianTeam_ pada beberapa versi Code.gs
+   * mengembalikan object data langsung, bukan wrapper ok_.
+   * Normalisasi di frontend agar kedua format tetap kompatibel:
+   *
+   * 1. { ok:true, data:{...} }
+   * 2. { teams:[...], technicians:[...] }
+   * 3. { team:{...}, technicians:[...] }
+   */
+  if (action === "technicianTeam") {
+
+    if (json && json.ok === true) {
+      return json;
+    }
+
+    if (json && (
+      Array.isArray(json.teams) ||
+      Array.isArray(json.technicians) ||
+      Object.prototype.hasOwnProperty.call(json, "team")
+    )) {
+      return {
+        ok: true,
+        data: json
+      };
+    }
+  }
 
   if (!json.ok) {
     throw new Error(
@@ -3085,12 +3113,7 @@ async function renderTeamManage() {
                           Edit
                         </button>
 
-                        <button
-                          class="btn danger"
-                          onclick="disableTeam('${esc(x.teamId)}')"
-                        >
-                          Nonaktifkan
-                        </button>
+                        <span class="badge green">AKTIF</span>
 
                       </div>
 
@@ -3593,42 +3616,11 @@ async function openTeamEditor(
 }
 
 
-window.disableTeam =
-  async teamId => {
-
-    if (
-      !confirm(
-        "Nonaktifkan tim ini?"
-      )
-    ) {
-      return;
-    }
-
-
-    try {
-
-      await api(
-        "deleteTechnicianTeam",
-        {
-          teamId
-        }
-      );
-
-
-      toast(
-        "Tim berhasil dinonaktifkan."
-      );
-
-
-      renderTeamManage();
-
-    } catch (err) {
-
-      toast(err.message);
-
-    }
-  };
-
+/*
+ * Nonaktifkan tim belum diaktifkan pada CHECKPOINT 3.2C
+ * karena endpoint deleteTechnicianTeam belum menjadi bagian
+ * dari kontrak backend yang sedang kita pakai.
+ */
 
 /*************************************************
  * LEADER TEAM
@@ -5889,16 +5881,11 @@ async function renderAudit() {
 
       session =
         v.data.session;
-
-
       localStorage.setItem(
         "alker_session",
         JSON.stringify(session)
       );
-
-
       await initApp();
-
     }
 
   } catch (e) {
@@ -5907,8 +5894,6 @@ async function renderAudit() {
       "Session lama tidak valid:",
       e.message
     );
-
-
     localStorage.removeItem(
       "alker_session"
     );
