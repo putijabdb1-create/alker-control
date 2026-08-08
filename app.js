@@ -1528,19 +1528,6 @@ window.showInitialForm =
 
             </label>
 
-
-            <label>
-              Nilai / Harga
-
-              <input
-                name="price"
-                type="number"
-                min="0"
-              >
-
-            </label>
-
-
             <label class="full-col">
 
               Keterangan
@@ -1632,9 +1619,6 @@ window.showInitialForm =
 
               condition:
                 f.condition.value,
-
-              price:
-                f.price.value,
 
               note:
                 f.note.value,
