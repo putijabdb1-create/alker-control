@@ -1907,30 +1907,45 @@ window.showInventoryDetail =
 
 /*************************************************
  * INPUT ALKER AWAL
+ *
+ * PILIHAN:
+ *
+ * 1. SUDAH DIBERIKAN
+ *    -> Merk
+ *    -> Type
+ *    -> Serial
+ *    -> Kondisi
+ *    -> Foto
+ *
+ * 2. BELUM DIBERIKAN
+ *    -> Tidak perlu data fisik
+ *    -> Masuk proses pengadaan
  *************************************************/
 
 window.showInitialForm =
   async () => {
 
     const r =
-      await api("masters");
+      await api(
+        "masters"
+      );
 
 
     const items =
-      r.data?.items || [];
+      r.data?.items ||
+      [];
 
 
     openModal(
 
-      "Input Alker yang Saat Ini Dipegang",
+      "Input Alker Awal",
 
       `
 
         <p class="muted">
 
-          Data ini masuk verifikasi Gudang.
-          Belum menjadi inventory resmi
-          sampai disetujui.
+          Pilih status ALKER terlebih dahulu.
+          Data akan diverifikasi oleh Gudang.
 
         </p>
 
@@ -1941,6 +1956,7 @@ window.showInitialForm =
 
 
             <label>
+
               Alker
 
               <select
@@ -1948,19 +1964,25 @@ window.showInitialForm =
                 required
               >
 
-                ${items
-                  .map(
-                    x => `
+                ${
+                  items
+                    .map(
+                      x => `
 
-                      <option
-                        value="${esc(x.itemId)}"
-                      >
-                        ${esc(x.itemName)}
-                      </option>
+                        <option
+                          value="${esc(
+                            x.itemId
+                          )}"
+                        >
+                          ${esc(
+                            x.itemName
+                          )}
+                        </option>
 
-                    `
-                  )
-                  .join("")}
+                      `
+                    )
+                    .join("")
+                }
 
               </select>
 
@@ -1968,49 +1990,136 @@ window.showInitialForm =
 
 
             <label>
-              Merk
 
-              <input
-                name="brand"
-              >
-
-            </label>
-
-
-            <label>
-              Type
-
-              <input
-                name="type"
-              >
-
-            </label>
-
-
-            <label>
-              Serial Number
-
-              <input
-                name="serialNumber"
-              >
-
-            </label>
-
-
-            <label>
-              Kondisi
+              Status Pemberian
 
               <select
-                name="condition"
+                name="givenStatus"
+                id="initialGivenStatus"
+                required
               >
 
-                <option>BAIK</option>
-                <option>RUSAK RINGAN</option>
-                <option>RUSAK BERAT</option>
+                <option value="">
+                  -- Pilih Status --
+                </option>
+
+                <option value="SUDAH DIBERIKAN">
+                  SUDAH DIBERIKAN
+                </option>
+
+                <option value="BELUM DIBERIKAN">
+                  BELUM DIBERIKAN
+                </option>
 
               </select>
 
             </label>
+
+
+            <div
+              id="initialPhysicalFields"
+              class="full-col"
+            >
+
+              <div class="form-grid">
+
+
+                <label>
+
+                  Merk
+
+                  <input
+                    name="brand"
+                    id="initialBrand"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Type
+
+                  <input
+                    name="type"
+                    id="initialType"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Serial Number
+
+                  <input
+                    name="serialNumber"
+                    id="initialSerial"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Kondisi
+
+                  <select
+                    name="condition"
+                    id="initialCondition"
+                  >
+
+                    <option>
+                      BAIK
+                    </option>
+
+                    <option>
+                      RUSAK RINGAN
+                    </option>
+
+                    <option>
+                      RUSAK BERAT
+                    </option>
+
+                  </select>
+
+                </label>
+
+
+                <label>
+
+                  Foto Alker
+
+                  <input
+                    name="photo"
+                    id="initialPhoto"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Foto Serial / Label
+
+                  <input
+                    name="serialPhoto"
+                    id="initialSerialPhoto"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                  >
+
+                </label>
+
+
+              </div>
+
+            </div>
+
 
             <label class="full-col">
 
@@ -2018,35 +2127,9 @@ window.showInitialForm =
 
               <textarea
                 name="note"
+                id="initialNote"
+                placeholder="Tambahkan keterangan jika diperlukan..."
               ></textarea>
-
-            </label>
-
-
-            <label>
-
-              Foto Alker
-
-              <input
-                name="photo"
-                type="file"
-                accept="image/*"
-                capture="environment"
-              >
-
-            </label>
-
-
-            <label>
-
-              Foto Serial / Label
-
-              <input
-                name="serialPhoto"
-                type="file"
-                accept="image/*"
-                capture="environment"
-              >
 
             </label>
 
@@ -2055,15 +2138,31 @@ window.showInitialForm =
 
 
           <div
+            id="initialInfo"
+            class="card"
+            style="margin-top:15px; display:none"
+          ></div>
+
+
+          <div
             class="actions"
             style="margin-top:15px"
           >
 
             <button
-              class="btn primary"
-              type="submit"
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
             >
-              Submit Verifikasi
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Kirim ke Gudang
             </button>
 
           </div>
@@ -2074,16 +2173,179 @@ window.showInitialForm =
     );
 
 
+    const status =
+      $("initialGivenStatus");
+
+    const physical =
+      $("initialPhysicalFields");
+
+    const info =
+      $("initialInfo");
+
+
+    function updateInitialMode(){
+
+      const value =
+        status.value;
+
+
+      if(
+        value ===
+        "SUDAH DIBERIKAN"
+      ){
+
+        physical.style.display =
+          "block";
+
+
+        $("initialBrand")
+          .required = true;
+
+        $("initialType")
+          .required = true;
+
+        $("initialSerial")
+          .required = true;
+
+        $("initialPhoto")
+          .required = true;
+
+        $("initialSerialPhoto")
+          .required = true;
+
+
+        info.style.display =
+          "block";
+
+
+        info.innerHTML = `
+
+          <strong>
+            ALKER SUDAH DIBERIKAN
+          </strong>
+
+          <p class="muted">
+            Lengkapi data fisik ALKER,
+            serial number, kondisi dan foto.
+          </p>
+
+        `;
+
+      }
+
+      else if(
+        value ===
+        "BELUM DIBERIKAN"
+      ){
+
+        physical.style.display =
+          "none";
+
+
+        $("initialBrand")
+          .required = false;
+
+        $("initialType")
+          .required = false;
+
+        $("initialSerial")
+          .required = false;
+
+        $("initialPhoto")
+          .required = false;
+
+        $("initialSerialPhoto")
+          .required = false;
+
+
+        info.style.display =
+          "block";
+
+
+        info.innerHTML = `
+
+          <strong>
+            ALKER BELUM DIBERIKAN
+          </strong>
+
+          <p class="muted">
+            Data ini tidak akan menjadi
+            inventory teknisi.
+            Setelah diverifikasi Gudang,
+            data akan diteruskan ke proses
+            pengadaan.
+          </p>
+
+        `;
+
+      }
+
+      else{
+
+        physical.style.display =
+          "none";
+
+        info.style.display =
+          "none";
+
+      }
+
+    }
+
+
+    status.onchange =
+      updateInitialMode;
+
+
     $("initialForm").onsubmit =
       async e => {
 
         e.preventDefault();
 
+
         const f =
           e.target;
 
 
-        try {
+        const givenStatus =
+          f.givenStatus.value;
+
+
+        if(!givenStatus){
+
+          toast(
+            "Pilih status pemberian ALKER."
+          );
+
+          return;
+
+        }
+
+
+        try{
+
+          let photo = "";
+          let serialPhoto = "";
+
+
+          if(
+            givenStatus ===
+            "SUDAH DIBERIKAN"
+          ){
+
+            photo =
+              await fileToBase64(
+                f.photo.files[0]
+              );
+
+
+            serialPhoto =
+              await fileToBase64(
+                f.serialPhoto.files[0]
+              );
+
+          }
+
 
           await api(
             "initialSubmit",
@@ -2092,53 +2354,74 @@ window.showInitialForm =
               itemId:
                 f.itemId.value,
 
+              givenStatus:
+                givenStatus,
+
               brand:
-                f.brand.value,
+                givenStatus ===
+                  "SUDAH DIBERIKAN"
+                  ? f.brand.value
+                  : "",
 
               type:
-                f.type.value,
+                givenStatus ===
+                  "SUDAH DIBERIKAN"
+                  ? f.type.value
+                  : "",
 
               serialNumber:
-                f.serialNumber.value,
+                givenStatus ===
+                  "SUDAH DIBERIKAN"
+                  ? f.serialNumber.value
+                  : "",
 
               condition:
-                f.condition.value,
+                givenStatus ===
+                  "SUDAH DIBERIKAN"
+                  ? f.condition.value
+                  : "BELUM DIVERIFIKASI",
 
               note:
                 f.note.value,
 
               photo:
-                await fileToBase64(
-                  f.photo.files[0]
-                ),
+                photo,
 
               serialPhoto:
-                await fileToBase64(
-                  f.serialPhoto.files[0]
-                )
+                serialPhoto
+
             }
           );
 
 
           closeModal();
 
+
           toast(
-            "Inventory dikirim ke Gudang."
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+
+              ? "ALKER dikirim ke Gudang untuk verifikasi."
+
+              : "ALKER belum diberikan. Pengajuan dikirim ke Gudang."
           );
 
 
-          renderMyInventory();
+          await renderMyInventory();
 
-        } catch (err) {
 
-          toast(err.message);
+        }catch(err){
+
+          toast(
+            err.message ||
+            "Gagal mengirim data."
+          );
 
         }
 
       };
 
   };
-
 
 /*************************************************
  * LAPORAN ALKER
@@ -2382,125 +2665,158 @@ async function renderInitialReport() {
  * KEPUTUSAN VERIFIKASI INVENTORY AWAL
  *************************************************/
 
-window.initialDecision = async (
-  initialId,
-  decision
-) => {
+window.initialDecision =
+  async (
+    id,
+    decision
+  ) => {
 
-  if (!initialId) {
-    toast("ID pengajuan tidak ditemukan.");
-    return;
-  }
+    if(!id){
 
-  /*
-   * APPROVE
-   */
-  if (decision === "APPROVE") {
+      toast(
+        "ID pengajuan tidak ditemukan."
+      );
 
-    const yakin = confirm(
-      "Approve ALKER ini?\n\n" +
-      "Setelah disetujui, ALKER akan " +
-      "menjadi inventory resmi teknisi."
+      return;
+
+    }
+
+
+    /*
+     * APPROVE / VERIFIKASI
+     */
+
+    if(
+      decision ===
+      "APPROVE"
+    ){
+
+      const yakin =
+        confirm(
+          "Proses pengajuan ALKER ini?"
+        );
+
+
+      if(!yakin){
+        return;
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "initialDecision",
+            {
+
+              initialId:
+                id,
+
+              decision:
+                "APPROVE"
+
+            }
+          );
+
+
+        toast(
+          r.data?.message ||
+          "Pengajuan berhasil diproses."
+        );
+
+
+        await renderInitial();
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal memproses pengajuan."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    /*
+     * REVISION
+     */
+
+    if(
+      decision ===
+      "REVISION"
+    ){
+
+      const note =
+        prompt(
+          "Masukkan alasan revisi:"
+        );
+
+
+      if(note === null){
+        return;
+      }
+
+
+      if(!note.trim()){
+
+        toast(
+          "Alasan revisi wajib diisi."
+        );
+
+        return;
+
+      }
+
+
+      try{
+
+        await api(
+          "initialDecision",
+          {
+
+            initialId:
+              id,
+
+            decision:
+              "REVISION",
+
+            note:
+              note.trim()
+
+          }
+        );
+
+
+        toast(
+          "Pengajuan dikembalikan ke teknisi."
+        );
+
+
+        await renderInitial();
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal mengirim revisi."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    toast(
+      "Keputusan tidak dikenal."
     );
 
-    if (!yakin) {
-      return;
-    }
-
-    try {
-
-      await api(
-        "initialDecision",
-        {
-          initialId: initialId,
-          decision: "APPROVE"
-        }
-      );
-
-      toast(
-        "ALKER berhasil di-approve."
-      );
-
-      await renderInitial();
-
-    } catch (err) {
-
-      toast(
-        err.message ||
-        "Gagal approve ALKER."
-      );
-
-    }
-
-    return;
-  }
-
-
-  /*
-   * REVISI
-   */
-  if (decision === "REVISION") {
-
-    const note =
-      prompt(
-        "Masukkan alasan revisi untuk teknisi:"
-      );
-
-    /*
-     * Cancel
-     */
-    if (note === null) {
-      return;
-    }
-
-    /*
-     * Jangan izinkan alasan kosong
-     */
-    if (!note.trim()) {
-
-      toast(
-        "Alasan revisi wajib diisi."
-      );
-
-      return;
-    }
-
-
-    try {
-
-      await api(
-        "initialDecision",
-        {
-          initialId: initialId,
-          decision: "REVISION",
-          note: note.trim()
-        }
-      );
-
-      toast(
-        "ALKER dikembalikan untuk revisi."
-      );
-
-      await renderInitial();
-
-    } catch (err) {
-
-      toast(
-        err.message ||
-        "Gagal mengirim revisi."
-      );
-
-    }
-
-    return;
-  }
-
-
-  toast(
-    "Keputusan verifikasi tidak dikenal."
-  );
-
-};
+  };
 
 /*************************************************
  * REQUEST
@@ -4751,8 +5067,9 @@ async function renderInitial(){
         </h2>
 
         <p class="muted">
-          Periksa data dan foto ALKER
-          sebelum menjadi inventory resmi.
+          Periksa ALKER yang dilaporkan
+          teknisi sebelum menjadi inventory
+          atau diteruskan ke pengadaan.
         </p>
 
       </div>
@@ -4771,9 +5088,10 @@ async function renderInitial(){
             <th>Teknisi</th>
             <th>Loker</th>
             <th>ALKER</th>
+            <th>Pemberian</th>
+            <th>Merk / Type</th>
             <th>SN</th>
             <th>Kondisi</th>
-            <th>Pemberian</th>
             <th>Tanggal</th>
             <th>Aksi</th>
 
@@ -4785,91 +5103,153 @@ async function renderInitial(){
         <tbody>
 
           ${
-            data.map(
-              x => `
+            data
+              .map(
+                x => `
 
-                <tr>
+                  <tr>
 
-                  <td>
-                    ${esc(x.technician)}
-                  </td>
+                    <td>
+                      ${esc(
+                        x.technician
+                      )}
+                    </td>
 
-                  <td>
-                    ${esc(x.loker)}
-                  </td>
+                    <td>
+                      ${esc(
+                        x.loker
+                      )}
+                    </td>
 
-                  <td>
-                    <strong>
-                      ${esc(x.itemName)}
-                    </strong>
-                  </td>
+                    <td>
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+                    </td>
 
-                  <td>
-                    ${esc(
-                      x.serialNumber ||
-                      "KOSONG"
-                    )}
-                  </td>
+                    <td>
+                      ${badge(
+                        x.givenStatus ||
+                        "BELUM DIBERIKAN"
+                      )}
+                    </td>
 
-                  <td>
-                    ${badge(x.condition)}
-                  </td>
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
 
-                  <td>
-                    ${badge(
-                      x.givenStatus ||
-                      "BELUM DITENTUKAN"
-                    )}
-                  </td>
+                          ? esc(
+                              (
+                                x.brand ||
+                                "-"
+                              ) +
+                              " / " +
+                              (
+                                x.type ||
+                                "-"
+                              )
+                            )
 
-                  <td>
-                    ${esc(x.date)}
-                  </td>
+                          : "-"
+                      }
+                    </td>
 
-                  <td>
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
 
-                    <div class="actions">
+                          ? esc(
+                              x.serialNumber ||
+                              "-"
+                            )
 
-                      <button
-                        class="btn secondary"
-                        onclick='showInitialVerificationDetail(${JSON.stringify(x)})'
-                      >
-                        Detail / Foto
-                      </button>
+                          : "-"
+                      }
+                    </td>
+
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
+
+                          ? badge(
+                              x.condition
+                            )
+
+                          : "-"
+                      }
+                    </td>
+
+                    <td>
+                      ${esc(
+                        x.date
+                      )}
+                    </td>
+
+                    <td>
 
                       <button
                         class="btn success"
-                        onclick='initialDecision("${esc(x.initialId)}","APPROVE")'
+                        onclick="
+                          initialDecision(
+                            '${esc(
+                              x.initialId
+                            )}',
+                            'APPROVE'
+                          )
+                        "
                       >
-                        Approve
+                        ${
+                          x.givenStatus ===
+                          "BELUM DIBERIKAN"
+
+                            ? "Verifikasi & Pengadaan"
+
+                            : "Approve"
+                        }
                       </button>
+
 
                       <button
                         class="btn warning"
-                        onclick='initialDecision("${esc(x.initialId)}","REVISION")'
+                        onclick="
+                          initialDecision(
+                            '${esc(
+                              x.initialId
+                            )}',
+                            'REVISION'
+                          )
+                        "
                       >
                         Revisi
                       </button>
 
-                    </div>
+                    </td>
 
-                  </td>
+                  </tr>
 
-                </tr>
+                `
+              )
+              .join("")
 
-              `
-            )
-            .join("") ||
+              ||
 
-            `
-              <tr>
-                <td colspan="8">
+              `<tr>
+
+                <td colspan="9">
+
                   <div class="empty">
-                    Tidak ada ALKER menunggu verifikasi.
+                    Tidak ada pengajuan
+                    yang menunggu verifikasi.
                   </div>
+
                 </td>
-              </tr>
-            `
+
+              </tr>`
           }
 
         </tbody>
