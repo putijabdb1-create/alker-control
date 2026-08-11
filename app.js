@@ -1405,52 +1405,58 @@ function renderMyInventoryPage(
                       </td>
 
 
-                      <td>
+                     <td>
 
-                        ${
-                          x.status ===
-                          "REVISI"
+  ${
+    x.status === "REVISI"
 
-                            ? `
+      ? `
 
-                              <div
-                                class="small danger-text"
-                              >
-                                ${esc(
-                                  x.reviewNote ||
-                                  "Mohon perbaiki data."
-                                )}
-                              </div>
+        <div class="small danger-text"
+             style="margin-bottom:8px">
 
-                            `
+          ${esc(
+            x.reviewNote ||
+            "Mohon perbaiki data."
+          )}
 
-                            : x.status ===
-                              "APPROVED"
+        </div>
 
-                              ? `
+        <button
+          class="btn warning"
+          onclick='showInitialRevisionForm(${JSON.stringify(x)})'
+        >
+          Perbaiki & Upload Ulang
+        </button>
 
-                                <span
-                                  class="small muted"
-                                >
-                                  Sudah menjadi
-                                  inventory resmi.
-                                </span>
+      `
 
-                              `
+      : x.status === "APPROVED"
 
-                              : `
+        ? `
 
-                                <span
-                                  class="small muted"
-                                >
-                                  Menunggu pemeriksaan
-                                  Gudang.
-                                </span>
+          <span
+            class="small muted"
+          >
+            Sudah menjadi
+            inventory resmi.
+          </span>
 
-                              `
-                        }
+        `
 
-                      </td>
+        : `
+
+          <span
+            class="small muted"
+          >
+            Menunggu pemeriksaan
+            Gudang.
+          </span>
+
+        `
+  }
+
+</td>
 
                     </tr>
 
