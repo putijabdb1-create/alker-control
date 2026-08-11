@@ -1726,108 +1726,177 @@ function renderInventoryTable(
  * INVENTORY DETAIL
  *************************************************/
 
-window.showInventoryDetail = x => {
+window.showInventoryDetail =
+  async x => {
 
-  openModal(
-    "Detail Inventory",
+    openModal(
 
-    `
+      "Detail Inventory",
 
-      <div class="detail-grid">
+      `
 
-        ${[
-          ["ID", x.inventoryId],
-          ["Alker", x.itemName],
-          ["Kategori", x.category],
-          ["Merk", x.brand],
-          ["Type", x.type],
-          ["Serial Number", x.serialNumber],
-          ["Lokasi", x.location],
-          ["Pemegang", x.holder],
-          ["Loker", x.loker],
-          ["Kondisi", x.condition],
-          ["Status", x.status],
-          ["Nilai", money(x.price)]
-        ]
-          .map(
-            a => `
+        <div class="detail-grid">
 
-              <div class="detail-box">
+          ${[
+            ["ID",x.inventoryId],
+            ["Alker",x.itemName],
+            ["Kategori",x.category],
+            ["Merk",x.brand],
+            ["Type",x.type],
+            ["Serial Number",x.serialNumber],
+            ["Lokasi",x.location],
+            ["Pemegang",x.holder],
+            ["Loker",x.loker],
+            ["Kondisi",x.condition],
+            ["Status",x.status],
+            ["Nilai",money(x.price)]
+          ]
+            .map(
+              a => `
 
-                <span>
-                  ${esc(a[0])}
-                </span>
+                <div class="detail-box">
 
-                <strong>
-                  ${esc(a[1] || "-")}
-                </strong>
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong>
+                    ${esc(
+                      a[1] || "-"
+                    )}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        <div
+          id="inventoryPhotoArea"
+          style="margin-top:18px"
+        >
+
+          <div class="empty">
+            Memuat foto...
+          </div>
+
+        </div>
+
+
+        ${
+          session.role ===
+          "TEKNISI"
+            ? `
+
+              <div
+                class="actions"
+                style="margin-top:15px"
+              >
+
+                <button
+                  class="btn warning"
+                  onclick="
+                    closeModal();
+                    showIssueForm(
+                      '${esc(x.inventoryId)}'
+                    )
+                  "
+                >
+                  Lapor Rusak / Hilang
+                </button>
 
               </div>
 
             `
+            : ""
+        }
+
+      `
+
+    );
+
+
+    const photos = [];
+
+
+    if(
+      x.photoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
+        );
+
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto ALKER",
+            dataUrl
           )
-          .join("")}
+        );
 
-      </div>
-
-
-      ${
-        x.photoUrl
-          ? `
-            <p>
-              <a
-                href="${esc(x.photoUrl)}"
-                target="_blank"
-              >
-                Buka Foto Alker
-              </a>
-            </p>
-          `
-          : ""
       }
 
+    }
 
-      ${
-        x.serialPhotoUrl
-          ? `
-            <p>
-              <a
-                href="${esc(x.serialPhotoUrl)}"
-                target="_blank"
-              >
-                Buka Foto Serial
-              </a>
-            </p>
-          `
-          : ""
+
+    if(
+      x.serialPhotoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
+
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Serial / Label",
+            dataUrl
+          )
+        );
+
       }
 
+    }
 
-      ${
-        session.role === "TEKNISI"
+
+    const area =
+      $("inventoryPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
           ? `
 
-            <div class="actions">
-
-              <button
-                class="btn warning"
-                onclick="
-                  closeModal();
-                  showIssueForm('${esc(x.inventoryId)}')
-                "
-              >
-                Lapor Rusak / Hilang
-              </button>
-
+            <div class="photo-grid">
+              ${photos.join("")}
             </div>
 
           `
-          : ""
-      }
+          : `
 
-    `
-  );
-};
+            <div class="photo-empty">
+              Foto tidak tersedia.
+            </div>
+
+          `;
+
+    }
+
+  };
 
 
 /*************************************************
@@ -2303,6 +2372,129 @@ async function renderInitialReport() {
   }
 }
 
+/*************************************************
+ * KEPUTUSAN VERIFIKASI INVENTORY AWAL
+ *************************************************/
+
+window.initialDecision = async (
+  initialId,
+  decision
+) => {
+
+  if (!initialId) {
+    toast("ID pengajuan tidak ditemukan.");
+    return;
+  }
+
+  /*
+   * APPROVE
+   */
+  if (decision === "APPROVE") {
+
+    const yakin = confirm(
+      "Approve ALKER ini?\n\n" +
+      "Setelah disetujui, ALKER akan " +
+      "menjadi inventory resmi teknisi."
+    );
+
+    if (!yakin) {
+      return;
+    }
+
+    try {
+
+      await api(
+        "initialDecision",
+        {
+          initialId: initialId,
+          decision: "APPROVE"
+        }
+      );
+
+      toast(
+        "ALKER berhasil di-approve."
+      );
+
+      await renderInitial();
+
+    } catch (err) {
+
+      toast(
+        err.message ||
+        "Gagal approve ALKER."
+      );
+
+    }
+
+    return;
+  }
+
+
+  /*
+   * REVISI
+   */
+  if (decision === "REVISION") {
+
+    const note =
+      prompt(
+        "Masukkan alasan revisi untuk teknisi:"
+      );
+
+    /*
+     * Cancel
+     */
+    if (note === null) {
+      return;
+    }
+
+    /*
+     * Jangan izinkan alasan kosong
+     */
+    if (!note.trim()) {
+
+      toast(
+        "Alasan revisi wajib diisi."
+      );
+
+      return;
+    }
+
+
+    try {
+
+      await api(
+        "initialDecision",
+        {
+          initialId: initialId,
+          decision: "REVISION",
+          note: note.trim()
+        }
+      );
+
+      toast(
+        "ALKER dikembalikan untuk revisi."
+      );
+
+      await renderInitial();
+
+    } catch (err) {
+
+      toast(
+        err.message ||
+        "Gagal mengirim revisi."
+      );
+
+    }
+
+    return;
+  }
+
+
+  toast(
+    "Keputusan verifikasi tidak dikenal."
+  );
+
+};
 
 /*************************************************
  * REQUEST
@@ -4530,12 +4722,16 @@ function warehouseTable(items) {
  * VERIFIKASI INVENTORY AWAL
  *************************************************/
 
-async function renderInitial() {
+async function renderInitial(){
 
   const r =
     await api(
       "initialPending"
     );
+
+
+  const data =
+    r.data || [];
 
 
   $("page").innerHTML = `
@@ -4549,8 +4745,8 @@ async function renderInitial() {
         </h2>
 
         <p class="muted">
-          Periksa ALKER yang dilaporkan
-          teknisi sebelum menjadi inventory resmi.
+          Periksa data dan foto ALKER
+          sebelum menjadi inventory resmi.
         </p>
 
       </div>
@@ -4568,11 +4764,12 @@ async function renderInitial() {
 
             <th>Teknisi</th>
             <th>Loker</th>
-            <th>Alker</th>
+            <th>ALKER</th>
             <th>SN</th>
             <th>Kondisi</th>
+            <th>Pemberian</th>
             <th>Tanggal</th>
-            <th></th>
+            <th>Aksi</th>
 
           </tr>
 
@@ -4582,82 +4779,91 @@ async function renderInitial() {
         <tbody>
 
           ${
-            (r.data || [])
-              .map(
-                x => `
+            data.map(
+              x => `
 
-                  <tr>
+                <tr>
 
-                    <td>
-                      ${esc(x.technician)}
-                    </td>
+                  <td>
+                    ${esc(x.technician)}
+                  </td>
 
-                    <td>
-                      ${esc(x.loker)}
-                    </td>
+                  <td>
+                    ${esc(x.loker)}
+                  </td>
 
-                    <td>
+                  <td>
+                    <strong>
                       ${esc(x.itemName)}
-                    </td>
+                    </strong>
+                  </td>
 
-                    <td>
-                      ${esc(x.serialNumber || "-")}
-                    </td>
+                  <td>
+                    ${esc(
+                      x.serialNumber ||
+                      "KOSONG"
+                    )}
+                  </td>
 
-                    <td>
-                      ${badge(x.condition)}
-                    </td>
+                  <td>
+                    ${badge(x.condition)}
+                  </td>
 
-                    <td>
-                      ${esc(x.date)}
-                    </td>
+                  <td>
+                    ${badge(
+                      x.givenStatus ||
+                      "BELUM DITENTUKAN"
+                    )}
+                  </td>
 
-                    <td>
+                  <td>
+                    ${esc(x.date)}
+                  </td>
+
+                  <td>
+
+                    <div class="actions">
+
+                      <button
+                        class="btn secondary"
+                        onclick='showInitialVerificationDetail(${JSON.stringify(x)})'
+                      >
+                        Detail / Foto
+                      </button>
 
                       <button
                         class="btn success"
-                        onclick="
-                          initialDecision(
-                            '${esc(x.initialId)}',
-                            'APPROVE'
-                          )
-                        "
+                        onclick='initialDecision("${esc(x.initialId)}","APPROVE")'
                       >
                         Approve
                       </button>
 
-
                       <button
                         class="btn warning"
-                        onclick="
-                          initialDecision(
-                            '${esc(x.initialId)}',
-                            'REVISION'
-                          )
-                        "
+                        onclick='initialDecision("${esc(x.initialId)}","REVISION")'
                       >
                         Revisi
                       </button>
 
-                    </td>
+                    </div>
 
-                  </tr>
+                  </td>
 
-                `
-              )
-              .join("") ||
+                </tr>
 
-            `<tr>
+              `
+            )
+            .join("") ||
 
-              <td colspan="7">
-
-                <div class="empty">
-                  Tidak ada yang menunggu.
-                </div>
-
-              </td>
-
-            </tr>`
+            `
+              <tr>
+                <td colspan="8">
+                  <div class="empty">
+                    Tidak ada ALKER menunggu verifikasi.
+                  </div>
+                </td>
+              </tr>
+            `
           }
 
         </tbody>
@@ -4668,59 +4874,6 @@ async function renderInitial() {
 
   `;
 }
-
-
-window.initialDecision =
-  async (
-    id,
-    decision
-  ) => {
-
-    let note = "";
-
-
-    if (
-      decision ===
-      "REVISION"
-    ) {
-
-      note =
-        prompt(
-          "Catatan revisi:"
-        ) || "";
-
-
-      if (!note)
-        return;
-    }
-
-
-    try {
-
-      await api(
-        "initialDecision",
-        {
-          initialId: id,
-          decision,
-          note
-        }
-      );
-
-
-      toast(
-        "Berhasil diproses."
-      );
-
-
-      renderInitial();
-
-    } catch (e) {
-
-      toast(e.message);
-
-    }
-  };
-
 
 /*************************************************
  * BARANG MASUK
@@ -7168,3 +7321,463 @@ function openPhotoViewer_(
   );
 
 }
+window.showInitialVerificationDetail =
+  async x => {
+
+    openModal(
+      "Detail Verifikasi ALKER",
+      `
+        <div class="detail-grid">
+
+          <div class="detail-box">
+            <span>Teknisi</span>
+            <strong>
+              ${esc(x.technician)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Loker</span>
+            <strong>
+              ${esc(x.loker)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>ALKER</span>
+            <strong>
+              ${esc(x.itemName)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Merk</span>
+            <strong>
+              ${esc(x.brand || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Type</span>
+            <strong>
+              ${esc(x.type || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Serial Number</span>
+            <strong>
+              ${esc(x.serialNumber || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Kondisi</span>
+            <strong>
+              ${esc(x.condition || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Status Pemberian</span>
+            <strong>
+              ${esc(
+                x.givenStatus ||
+                "BELUM DITENTUKAN"
+              )}
+            </strong>
+          </div>
+
+        </div>
+
+        <div
+          id="initialPhotoArea"
+          style="margin-top:18px"
+        >
+          <div class="empty">
+            Memuat foto...
+          </div>
+        </div>
+      `
+    );
+
+
+    const photos = [];
+
+
+    if(x.photoUrl){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
+        );
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto ALKER",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    if(x.serialPhotoUrl){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Serial / Label",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    const area =
+      $("initialPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
+          ? `
+            <div class="photo-grid">
+              ${photos.join("")}
+            </div>
+          `
+          : `
+            <div class="photo-empty">
+              Foto belum tersedia.
+            </div>
+          `;
+
+    }
+
+  };
+  window.showInitialRevisionForm =
+  async initial => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    const items =
+      r.data?.items ||
+      [];
+
+
+    openModal(
+
+      "Perbaiki Pengajuan ALKER",
+
+      `
+
+        <p class="muted">
+
+          Gudang meminta perbaikan
+          data ALKER berikut.
+
+        </p>
+
+
+        <div
+          class="card"
+          style="margin-bottom:15px"
+        >
+
+          <strong>
+            ${esc(
+              initial.itemName
+            )}
+          </strong>
+
+          <p class="danger-text">
+
+            ${
+              esc(
+                initial.reviewNote ||
+                "Mohon perbaiki data."
+              )
+            }
+
+          </p>
+
+        </div>
+
+
+        <form id="initialRevisionForm">
+
+          <div class="form-grid">
+
+            <input
+              type="hidden"
+              name="initialId"
+              value="${esc(
+                initial.initialId
+              )}"
+            >
+
+
+            <label>
+
+              Alker
+
+              <input
+                value="${esc(
+                  initial.itemName
+                )}"
+                disabled
+              >
+
+            </label>
+
+
+            <label>
+
+              Merk
+
+              <input
+                name="brand"
+                value="${esc(
+                  initial.brand ||
+                  ""
+                )}"
+              >
+
+            </label>
+
+
+            <label>
+
+              Type
+
+              <input
+                name="type"
+                value="${esc(
+                  initial.type ||
+                  ""
+                )}"
+              >
+
+            </label>
+
+
+            <label>
+
+              Serial Number
+
+              <input
+                name="serialNumber"
+                value="${esc(
+                  initial.serialNumber ||
+                  ""
+                )}"
+              >
+
+            </label>
+
+
+            <label>
+
+              Kondisi
+
+              <select
+                name="condition"
+              >
+
+                <option
+                  ${
+                    initial.condition ===
+                    "BAIK"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  BAIK
+                </option>
+
+                <option
+                  ${
+                    initial.condition ===
+                    "RUSAK RINGAN"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  RUSAK RINGAN
+                </option>
+
+                <option
+                  ${
+                    initial.condition ===
+                    "RUSAK BERAT"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  RUSAK BERAT
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+              >${esc(
+                initial.note ||
+                ""
+              )}</textarea>
+
+            </label>
+
+
+            <label>
+
+              Foto Alker Baru
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+            <label>
+
+              Foto Serial Baru
+
+              <input
+                name="serialPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Kirim Ulang
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("initialRevisionForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try{
+
+          await api(
+            "initialResubmit",
+            {
+
+              initialId:
+                f.initialId.value,
+
+              brand:
+                f.brand.value,
+
+              type:
+                f.type.value,
+
+              serialNumber:
+                f.serialNumber.value,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                ),
+
+              serialPhoto:
+                await fileToBase64(
+                  f.serialPhoto.files[0]
+                )
+
+            }
+          );
+
+
+          closeModal();
+
+
+          toast(
+            "Perbaikan berhasil dikirim ke Gudang."
+          );
+
+
+          renderMyInventory();
+
+
+        }catch(err){
+
+          toast(
+            err.message
+          );
+
+        }
+
+      };
+
+  };
