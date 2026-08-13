@@ -2546,6 +2546,8 @@ $("initialForm").onsubmit =
 
   };
 
+};
+
 /*************************************************
  * LAPORAN ALKER
  *************************************************/
@@ -5357,46 +5359,6 @@ async function renderInitial(){
 
 		</td>
 				
-                    <td>
-
-                      <button
-                        class="btn success"
-                        onclick="
-                          initialDecision(
-                            '${esc(
-                              x.initialId
-                            )}',
-                            'APPROVE'
-                          )
-                        "
-                      >
-                        ${
-                          x.givenStatus ===
-                          "BELUM DIBERIKAN"
-
-                            ? "Verifikasi & Pengadaan"
-
-                            : "Approve"
-                        }
-                      </button>
-
-
-                      <button
-                        class="btn warning"
-                        onclick="
-                          initialDecision(
-                            '${esc(
-                              x.initialId
-                            )}',
-                            'REVISION'
-                          )
-                        "
-                      >
-                        Revisi
-                      </button>
-
-                    </td>
-
                   </tr>
 
                 `
