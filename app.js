@@ -500,7 +500,11 @@ function buildNav() {
           "▦",
           "Stok Gudang"
         ],
-
+		[
+		  "masterprice",
+		  "💰",
+		  "Master Harga ALKER"
+		],
         [
           "initial",
           "✓",
@@ -763,6 +767,9 @@ async function route(name) {
 
     if (name === "warehouse")
       return renderWarehouse();
+	  
+	if (name === "masterprice")
+	  return renderMasterPrice();
 
     if (name === "initial")
       return renderInitial();
@@ -5566,6 +5573,16 @@ async function renderReceiving() {
 }
 
 
+/*************************************************
+ * FORM BARANG MASUK GUDANG
+ *
+ * HARGA OTOMATIS DARI MASTER ALKER
+ *
+ * Gudang tidak mengisi harga manual.
+ * Harga hanya ditentukan melalui
+ * menu MASTER HARGA ALKER.
+ *************************************************/
+
 window.showReceivingForm =
   async () => {
 
@@ -5574,6 +5591,42 @@ window.showReceivingForm =
         "masters"
       );
 
+
+    const items =
+      r.data?.items ||
+      [];
+
+
+    /*
+     * ==========================================
+     * FORMAT RUPIAH
+     * ==========================================
+     */
+
+    const formatRupiah =
+      value => {
+
+        const n =
+          Number(value || 0);
+
+
+        return new Intl.NumberFormat(
+          "id-ID",
+          {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+          }
+        ).format(n);
+
+      };
+
+
+    /*
+     * ==========================================
+     * MODAL
+     * ==========================================
+     */
 
     openModal(
 
@@ -5586,27 +5639,35 @@ window.showReceivingForm =
           <div class="form-grid">
 
 
+            <!-- ==============================
+                 ALKER
+            =============================== -->
+
             <label>
 
               Alker
 
               <select
                 name="itemId"
+                id="receivingItemId"
                 required
               >
 
                 ${
-                  (
-                    r.data?.items ||
-                    []
-                  )
+                  items
                     .map(
                       x => `
 
                         <option
-                          value="${esc(x.itemId)}"
+                          value="${esc(
+                            x.itemId
+                          )}"
                         >
-                          ${esc(x.itemName)}
+
+                          ${esc(
+                            x.itemName
+                          )}
+
                         </option>
 
                       `
@@ -5618,6 +5679,10 @@ window.showReceivingForm =
 
             </label>
 
+
+            <!-- ==============================
+                 QTY
+            =============================== -->
 
             <label>
 
@@ -5634,6 +5699,10 @@ window.showReceivingForm =
             </label>
 
 
+            <!-- ==============================
+                 MERK
+            =============================== -->
+
             <label>
 
               Merk
@@ -5644,6 +5713,10 @@ window.showReceivingForm =
 
             </label>
 
+
+            <!-- ==============================
+                 TYPE
+            =============================== -->
 
             <label>
 
@@ -5656,6 +5729,10 @@ window.showReceivingForm =
             </label>
 
 
+            <!-- ==============================
+                 SERIAL NUMBER
+            =============================== -->
+
             <label>
 
               Serial Number
@@ -5667,18 +5744,42 @@ window.showReceivingForm =
             </label>
 
 
+            <!-- ==============================
+                 HARGA MASTER
+            =============================== -->
+
             <label>
 
-              Harga per Unit
+              Harga Master ALKER
 
               <input
-                name="price"
-                type="number"
-                min="0"
+                id="receivingMasterPrice"
+                type="text"
+                readonly
+                style="
+                  background:#f3f4f6;
+                  font-weight:700;
+                  cursor:not-allowed;
+                "
               >
+
+              <small
+                class="muted"
+                style="
+                  display:block;
+                  margin-top:4px;
+                "
+              >
+                Harga ditentukan dari Master Harga ALKER.
+                Tidak dapat diubah di Barang Masuk.
+              </small>
 
             </label>
 
+
+            <!-- ==============================
+                 SUPPLIER
+            ============================== -->
 
             <label>
 
@@ -5691,6 +5792,10 @@ window.showReceivingForm =
             </label>
 
 
+            <!-- ==============================
+                 PO / INVOICE
+            ============================== -->
+
             <label>
 
               No. PO / Invoice
@@ -5702,6 +5807,10 @@ window.showReceivingForm =
             </label>
 
 
+            <!-- ==============================
+                 KETERANGAN
+            ============================== -->
+
             <label class="full-col">
 
               Keterangan
@@ -5712,6 +5821,10 @@ window.showReceivingForm =
 
             </label>
 
+
+            <!-- ==============================
+                 FOTO BARANG
+            ============================== -->
 
             <label>
 
@@ -5726,6 +5839,10 @@ window.showReceivingForm =
 
             </label>
 
+
+            <!-- ==============================
+                 FOTO DOKUMEN
+            ============================== -->
 
             <label>
 
@@ -5744,15 +5861,76 @@ window.showReceivingForm =
           </div>
 
 
+          <!-- ================================
+               INFORMASI HARGA
+          ================================= -->
+
+          <div
+            class="card"
+            style="
+              margin-top:15px;
+              padding:14px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:12px;
+              "
+            >
+
+              <div>
+
+                <strong>
+                  Nilai Aset
+                </strong>
+
+                <div
+                  class="muted"
+                  style="margin-top:3px"
+                >
+                  Mengikuti harga Master ALKER.
+                </div>
+
+              </div>
+
+
+              <strong
+                id="receivingMasterPriceInfo"
+                style="
+                  font-size:18px;
+                "
+              >
+                Rp0
+              </strong>
+
+            </div>
+
+          </div>
+
+
+          <!-- ================================
+               ACTION
+          ================================= -->
+
           <div
             class="actions"
-            style="margin-top:15px"
+            style="
+              margin-top:15px;
+            "
           >
 
             <button
+              type="submit"
               class="btn primary"
+              id="receivingSaveBtn"
             >
+
               Simpan & Masuk Gudang
+
             </button>
 
           </div>
@@ -5763,79 +5941,251 @@ window.showReceivingForm =
     );
 
 
-    $("receivingForm").onsubmit =
-      async e => {
+    /*
+     * ==========================================
+     * ELEMENT
+     * ==========================================
+     */
 
-        e.preventDefault();
-
-        const f =
-          e.target;
+    const form =
+      $("receivingForm");
 
 
-        try {
+    const itemSelect =
+      $("receivingItemId");
 
-          await api(
-            "receive",
-            {
 
-              itemId:
-                f.itemId.value,
+    const priceInput =
+      $("receivingMasterPrice");
 
-              qty:
-                f.qty.value,
 
-              brand:
-                f.brand.value,
+    const priceInfo =
+      $("receivingMasterPriceInfo");
 
-              type:
-                f.type.value,
 
-              serialNumber:
-                f.serialNumber.value,
+    const saveBtn =
+      $("receivingSaveBtn");
 
-              price:
-                f.price.value,
 
-              supplier:
-                f.supplier.value,
+    /*
+     * ==========================================
+     * UPDATE HARGA MASTER DI LAYAR
+     * ==========================================
+     */
 
-              reference:
-                f.reference.value,
+    const updateMasterPriceDisplay =
+      () => {
 
-              note:
-                f.note.value,
-
-              photo:
-                await fileToBase64(
-                  f.photo.files[0]
-                ),
-
-              docPhoto:
-                await fileToBase64(
-                  f.docPhoto.files[0]
-                )
-            }
+        const selectedItem =
+          items.find(
+            x =>
+              String(x.itemId) ===
+              String(
+                itemSelect.value
+              )
           );
 
 
-          closeModal();
-
-          toast(
-            "Barang masuk dan stok bertambah."
+        const price =
+          Number(
+            selectedItem?.standardPrice ||
+            selectedItem?.price ||
+            0
           );
 
 
-          renderReceiving();
+        const formatted =
+          formatRupiah(
+            price
+          );
 
-        } catch (err) {
 
-          toast(err.message);
+        if(priceInput){
+
+          priceInput.value =
+            formatted;
+
+        }
+
+
+        if(priceInfo){
+
+          priceInfo.textContent =
+            formatted;
 
         }
 
       };
-  };
 
+
+    /*
+     * ==========================================
+     * SAAT ALKER DIGANTI
+     * ==========================================
+     */
+
+    itemSelect.onchange =
+      updateMasterPriceDisplay;
+
+
+    /*
+     * Tampilkan harga pertama
+     */
+
+    updateMasterPriceDisplay();
+
+
+    /*
+     * ==========================================
+     * SUBMIT
+     * ==========================================
+     */
+
+    form.onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+
+        /*
+         * Cegah klik 2x
+         */
+
+        if(
+          saveBtn &&
+          saveBtn.disabled
+        ){
+
+          return;
+
+        }
+
+
+        /*
+         * Lock tombol
+         */
+
+        if(saveBtn){
+
+          saveBtn.disabled =
+            true;
+
+          saveBtn.innerHTML =
+            "⏳ Menyimpan...";
+
+        }
+
+
+        try {
+
+          /*
+           * ==================================
+           * KIRIM DATA
+           * ==================================
+           *
+           * PENTING:
+           * Tidak ada lagi:
+           *
+           * price: f.price.value
+           *
+           * Harga diambil backend dari
+           * MASTER_ALKER.standardPrice.
+           */
+
+          const result =
+            await api(
+              "receive",
+              {
+
+                itemId:
+                  form.itemId.value,
+
+                qty:
+                  form.qty.value,
+
+                brand:
+                  form.brand.value,
+
+                type:
+                  form.type.value,
+
+                serialNumber:
+                  form.serialNumber.value,
+
+                supplier:
+                  form.supplier.value,
+
+                reference:
+                  form.reference.value,
+
+                note:
+                  form.note.value,
+
+                photo:
+                  await fileToBase64(
+                    form.photo.files[0]
+                  ),
+
+                docPhoto:
+                  await fileToBase64(
+                    form.docPhoto.files[0]
+                  )
+
+              }
+            );
+
+
+          /*
+           * ==================================
+           * BERHASIL
+           * ==================================
+           */
+
+          closeModal();
+
+
+          toast(
+            "Barang berhasil masuk Gudang dengan harga Master ALKER."
+          );
+
+
+          await renderReceiving();
+
+
+        } catch(err) {
+
+
+          /*
+           * ==================================
+           * GAGAL
+           * ==================================
+           */
+
+          toast(
+            err.message ||
+            "Gagal menyimpan Barang Masuk."
+          );
+
+
+          /*
+           * Buka kembali tombol
+           */
+
+          if(saveBtn){
+
+            saveBtn.disabled =
+              false;
+
+            saveBtn.innerHTML =
+              "Simpan & Masuk Gudang";
+
+          }
+
+        }
+
+      };
+
+  };
 
 /*************************************************
  * DISTRIBUSI
@@ -8404,6 +8754,482 @@ window.showInitialVerificationDetail =
             err.message
           );
         }
+      };
+
+  };
+  /*************************************************
+ * MASTER HARGA ALKER
+ * KHUSUS SPV GUDANG / ADMIN
+ *************************************************/
+
+async function renderMasterPrice() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Master Harga ALKER
+        </h2>
+
+        <p class="muted">
+          Gudang menentukan nilai aset berdasarkan
+          nama ALKER. Harga ini akan digunakan
+          sebagai nilai master inventory.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="masterPriceBody">
+
+      <div class="card">
+        Memuat master harga...
+      </div>
+
+    </div>
+
+  `;
+
+
+  try {
+
+    const r =
+      await api("masterPrices");
+
+
+    const data =
+      r.data || [];
+
+
+    $("masterPriceBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "Total ALKER",
+          data.length,
+          "master harga"
+        )}
+
+        ${metric(
+          "Sudah Ada Harga",
+          data.filter(
+            x =>
+              Number(x.price || 0) > 0
+          ).length,
+          "item"
+        )}
+
+        ${metric(
+          "Belum Ada Harga",
+          data.filter(
+            x =>
+              Number(x.price || 0) <= 0
+          ).length,
+          "item"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <div class="toolbar">
+
+          <input
+            id="masterPriceSearch"
+            placeholder="Cari nama ALKER..."
+          >
+
+        </div>
+
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+
+              <tr>
+
+                <th>ID</th>
+                <th>Nama ALKER</th>
+                <th>Kategori</th>
+                <th>Satuan</th>
+                <th>Harga Master</th>
+                <th>Status</th>
+                <th>Aksi</th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody id="masterPriceTable">
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    const draw = () => {
+
+      const q =
+        (
+          $("masterPriceSearch")?.value ||
+          ""
+        )
+          .toLowerCase()
+          .trim();
+
+
+      const filtered =
+        data.filter(
+          x =>
+            JSON.stringify(x)
+              .toLowerCase()
+              .includes(q)
+        );
+
+
+      $("masterPriceTable").innerHTML =
+
+        filtered
+          .map(
+            x => `
+
+              <tr>
+
+                <td>
+                  ${esc(x.itemId || "-")}
+                </td>
+
+                <td>
+
+                  <strong>
+                    ${esc(x.itemName || "-")}
+                  </strong>
+
+                </td>
+
+                <td>
+                  ${esc(x.category || "-")}
+                </td>
+
+                <td>
+                  ${esc(x.unit || "UNIT")}
+                </td>
+
+                <td>
+
+                  <strong>
+                    ${money(x.price)}
+                  </strong>
+
+                </td>
+
+                <td>
+
+                  ${
+                    Number(x.price || 0) > 0
+                      ? badge("AKTIF")
+                      : badge("BELUM DITENTUKAN")
+                  }
+
+                </td>
+
+                <td>
+
+                  <button
+                    class="btn secondary"
+                    onclick='showMasterPriceForm(${JSON.stringify(x)})'
+                  >
+                    Ubah Harga
+                  </button>
+
+                </td>
+
+              </tr>
+
+            `
+          )
+          .join("") ||
+
+        `
+
+          <tr>
+
+            <td colspan="7">
+
+              <div class="empty">
+                Data ALKER tidak ditemukan.
+              </div>
+
+            </td>
+
+          </tr>
+
+        `;
+
+    };
+
+
+    $("masterPriceSearch").oninput =
+      draw;
+
+
+    draw();
+
+
+  } catch (err) {
+
+    $("masterPriceBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat Master Harga
+        </strong>
+
+        <p class="danger-text">
+          ${esc(err.message)}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+
+
+/*************************************************
+ * FORM UBAH HARGA MASTER
+ *************************************************/
+
+window.showMasterPriceForm =
+  x => {
+
+    openModal(
+
+      "Ubah Harga Master ALKER",
+
+      `
+
+        <div class="card">
+
+          <div class="detail-grid">
+
+            <div class="detail-box">
+
+              <span>
+                ID ALKER
+              </span>
+
+              <strong>
+                ${esc(x.itemId || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Nama ALKER
+              </span>
+
+              <strong>
+                ${esc(x.itemName || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Kategori
+              </span>
+
+              <strong>
+                ${esc(x.category || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Harga Saat Ini
+              </span>
+
+              <strong>
+                ${money(x.price)}
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <form
+          id="masterPriceForm"
+          style="margin-top:15px"
+        >
+
+          <input
+            type="hidden"
+            name="itemId"
+            value="${esc(x.itemId || "")}"
+          >
+
+
+          <label>
+
+            Harga Master Baru
+
+            <input
+              name="price"
+              type="number"
+              min="0"
+              value="${Number(x.price || 0)}"
+              required
+            >
+
+          </label>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Simpan Harga
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("masterPriceForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+
+        const f =
+          e.target;
+
+
+        const btn =
+          f.querySelector(
+            'button[type="submit"]'
+          );
+
+
+        if (
+          btn &&
+          btn.disabled
+        ) {
+
+          return;
+
+        }
+
+
+        if (btn) {
+
+          btn.disabled = true;
+
+          btn.textContent =
+            "⏳ Menyimpan...";
+
+        }
+
+
+        try {
+
+          await api(
+            "updateMasterPrice",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              price:
+                f.price.value
+
+            }
+          );
+
+
+          closeModal();
+
+
+          toast(
+            "Harga master ALKER berhasil diperbarui."
+          );
+
+
+          await renderMasterPrice();
+
+
+        } catch (err) {
+
+          if (btn) {
+
+            btn.disabled =
+              false;
+
+            btn.textContent =
+              "Simpan Harga";
+
+          }
+
+
+          toast(
+            err.message ||
+            "Gagal mengubah harga master."
+          );
+
+        }
+
       };
 
   };
