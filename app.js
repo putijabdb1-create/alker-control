@@ -2205,14 +2205,14 @@ window.showInitialForm =
           .required = true;
 
         $("initialSerial")
-          .required = true;
+          .required = false;
 
         $("initialPhoto")
           .required = true;
-
-        $("initialSerialPhoto")
-          .required = true;
-
+		  
+		// FOTO SERIAL TIDAK WAJIB
+		$("initialSerialPhoto")
+		.required = false;
 
         info.style.display =
           "block";
@@ -2297,129 +2297,252 @@ window.showInitialForm =
       updateInitialMode;
 
 
-    $("initialForm").onsubmit =
-      async e => {
+$("initialForm").onsubmit =
+  async e => {
 
-        e.preventDefault();
+    e.preventDefault();
+
+    const f = e.target;
+
+    // ==========================================
+    // CEGAH DOUBLE SUBMIT
+    // ==========================================
+
+    if (f.dataset.saving === "1") {
+      return;
+    }
+
+    f.dataset.saving = "1";
+
+    const submitBtn =
+      f.querySelector(
+        'button[type="submit"]'
+      );
+
+    const cancelBtn =
+      f.querySelector(
+        'button[type="button"]'
+      );
 
 
-        const f =
-          e.target;
+    // Simpan teks asli
+    const originalText =
+      submitBtn
+        ? submitBtn.textContent
+        : "Kirim ke Gudang";
 
 
-        const givenStatus =
-          f.givenStatus.value;
+    // ==========================================
+    // LOCK FORM
+    // ==========================================
+
+    if (submitBtn) {
+
+      submitBtn.disabled = true;
+
+      submitBtn.innerHTML =
+        "⏳ Sedang menyimpan...";
+
+    }
 
 
-        if(!givenStatus){
+    if (cancelBtn) {
 
-          toast(
-            "Pilih status pemberian ALKER."
+      cancelBtn.disabled = true;
+
+    }
+
+
+    const inputs =
+      f.querySelectorAll(
+        "input, select, textarea"
+      );
+
+
+    inputs.forEach(
+      el => {
+
+        el.disabled = true;
+
+      }
+    );
+
+
+    try {
+
+      const givenStatus =
+        f.givenStatus.value;
+
+
+      if (!givenStatus) {
+
+        throw new Error(
+          "Pilih status pemberian ALKER."
+        );
+
+      }
+
+
+      let photo = "";
+      let serialPhoto = "";
+
+
+      // ==========================================
+      // ALKER SUDAH DIBERIKAN
+      // ==========================================
+
+      if (
+        givenStatus ===
+        "SUDAH DIBERIKAN"
+      ) {
+
+        // Foto ALKER tetap WAJIB
+        photo =
+          await fileToBase64(
+            f.photo.files[0]
           );
 
-          return;
+
+        if (!photo) {
+
+          throw new Error(
+            "Foto ALKER wajib diupload."
+          );
 
         }
 
 
-        try{
+        // ========================================
+        // FOTO SERIAL OPSIONAL
+        // ========================================
 
-          let photo = "";
-          let serialPhoto = "";
+        if (
+          f.serialPhoto.files &&
+          f.serialPhoto.files[0]
+        ) {
 
+          serialPhoto =
+            await fileToBase64(
+              f.serialPhoto.files[0]
+            );
 
-          if(
-            givenStatus ===
-            "SUDAH DIBERIKAN"
-          ){
+        }
 
-            photo =
-              await fileToBase64(
-                f.photo.files[0]
-              );
-
-
-            serialPhoto =
-              await fileToBase64(
-                f.serialPhoto.files[0]
-              );
-
-          }
+      }
 
 
-          await api(
-            "initialSubmit",
-            {
+      // ==========================================
+      // KIRIM KE SERVER
+      // ==========================================
 
-              itemId:
-                f.itemId.value,
+      await api(
+        "initialSubmit",
+        {
 
-              givenStatus:
-                givenStatus,
+          itemId:
+            f.itemId.value,
 
-              brand:
-                givenStatus ===
-                  "SUDAH DIBERIKAN"
-                  ? f.brand.value
-                  : "",
+          givenStatus:
+            givenStatus,
 
-              type:
-                givenStatus ===
-                  "SUDAH DIBERIKAN"
-                  ? f.type.value
-                  : "",
-
-              serialNumber:
-                givenStatus ===
-                  "SUDAH DIBERIKAN"
-                  ? f.serialNumber.value
-                  : "",
-
-              condition:
-                givenStatus ===
-                  "SUDAH DIBERIKAN"
-                  ? f.condition.value
-                  : "BELUM DIVERIFIKASI",
-
-              note:
-                f.note.value,
-
-              photo:
-                photo,
-
-              serialPhoto:
-                serialPhoto
-
-            }
-          );
-
-
-          closeModal();
-
-
-          toast(
+          brand:
             givenStatus ===
               "SUDAH DIBERIKAN"
+              ? f.brand.value
+              : "",
 
-              ? "ALKER dikirim ke Gudang untuk verifikasi."
+          type:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.type.value
+              : "",
 
-              : "ALKER belum diberikan. Pengajuan dikirim ke Gudang."
-          );
+          serialNumber:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.serialNumber.value
+              : "",
 
+          condition:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.condition.value
+              : "BELUM DIVERIFIKASI",
 
-          await renderMyInventory();
+          note:
+            f.note.value,
 
+          photo:
+            photo,
 
-        }catch(err){
-
-          toast(
-            err.message ||
-            "Gagal mengirim data."
-          );
+          serialPhoto:
+            serialPhoto
 
         }
+      );
 
-      };
+
+      // ==========================================
+      // BERHASIL
+      // ==========================================
+
+      closeModal();
+
+
+      toast(
+        givenStatus ===
+          "SUDAH DIBERIKAN"
+
+          ? "ALKER berhasil dikirim ke Gudang."
+
+          : "Pengajuan ALKER berhasil dikirim ke Gudang."
+      );
+
+
+      await renderMyInventory();
+
+
+    } catch (err) {
+
+      // ==========================================
+      // GAGAL → BUKA KEMBALI FORM
+      // ==========================================
+
+      f.dataset.saving = "0";
+
+
+      if (submitBtn) {
+
+        submitBtn.disabled = false;
+
+        submitBtn.textContent =
+          originalText;
+
+      }
+
+
+      if (cancelBtn) {
+
+        cancelBtn.disabled = false;
+
+      }
+
+
+      inputs.forEach(
+        el => {
+
+          el.disabled = false;
+
+        }
+      );
+
+
+      toast(
+        err.message ||
+        "Gagal menyimpan data."
+      );
+
+    }
 
   };
 
@@ -5189,7 +5312,51 @@ async function renderInitial(){
                         x.date
                       )}
                     </td>
+					
+	<td>
 
+  <div class="actions">
+
+    <button
+      class="btn secondary"
+      onclick='showInitialVerificationDetail(${JSON.stringify(x)})'
+    >
+      Detail / Foto
+    </button>
+
+    <button
+      class="btn success"
+      onclick="
+        initialDecision(
+          '${esc(x.initialId)}',
+          'APPROVE'
+        )
+      "
+    >
+      ${
+        x.givenStatus ===
+        "BELUM DIBERIKAN"
+          ? "Verifikasi & Pengadaan"
+          : "Approve"
+      }
+    </button>
+
+    <button
+      class="btn warning"
+      onclick="
+        initialDecision(
+          '${esc(x.initialId)}',
+          'REVISION'
+        )
+      "
+    >
+      Revisi
+    </button>
+
+	</div>
+
+		</td>
+				
                     <td>
 
                       <button
