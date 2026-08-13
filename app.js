@@ -8316,12 +8316,8 @@ window.showInitialVerificationDetail =
                 accept="image/*"
                 capture="environment"
               >
-
             </label>
-
           </div>
-
-
           <div
             class="actions"
             style="margin-top:15px"
@@ -8396,26 +8392,18 @@ window.showInitialVerificationDetail =
             }
           );
 
-
           closeModal();
-
 
           toast(
             "Perbaikan berhasil dikirim ke Gudang."
           );
-
-
           renderMyInventory();
-
-
         }catch(err){
 
           toast(
             err.message
           );
-
         }
-
       };
 
   };
