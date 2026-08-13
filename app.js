@@ -4222,35 +4222,47 @@ window.editTeam =
   };
 
 
-async function openTeamEditor(
-  existing = null
-) 
+async function openTeamEditor(existing = null) {
 
-{  const r =
-    await api(
-      "technicianTeam"
-    );
+  const r = await api("technicianTeam");
 
+  const d = r.data || {};
 
-  const d =
-    r.data || {};
+  const technicians = d.technicians || [];
 
+  /*
+   * ==========================================
+   * LOKER OPERASIONAL
+   * ==========================================
+   */
 
-  const technicians =
-    d.technicians || [];
+  const OPERATIONAL_LOKERS = [
+    "IOAN / ASSURANCE",
+    "PSB / FULFILLMENT",
+    "MAINTENANCE / OSP"
+  ];
 
 
   /*
-   * Leader hanya mendapatkan
-   * teknisi lokernya.
-   *
-   * Admin/SPV semua teknisi.
+   * ==========================================
+   * LOKER TERPILIH
+   * ==========================================
    */
+
   const selectedLoker =
     existing?.loker ||
-    session.loker ||
-    "";
+    (
+      session.role === "LEADER"
+        ? OPERATIONAL_LOKERS[0]
+        : session.loker
+    );
 
+
+  /*
+   * ==========================================
+   * TEKNISI SESUAI LOKER
+   * ==========================================
+   */
 
   const available =
     technicians.filter(
@@ -4271,7 +4283,6 @@ async function openTeamEditor(
 
         <div class="form-grid">
 
-
           <label>
 
             Loker
@@ -4284,45 +4295,36 @@ async function openTeamEditor(
 
               ${
                 session.role === "LEADER"
-                  ? `
 
-                    <option
-                      value="${esc(session.loker)}"
-                      selected
-                    >
-                      ${esc(session.loker)}
-                    </option>
+                  ? OPERATIONAL_LOKERS
+                      .map(
+                        x => `
 
-                  `
+                          <option
+                            value="${esc(x)}"
+                            ${
+                              x === selectedLoker
+                                ? "selected"
+                                : ""
+                            }
+                          >
+                            ${esc(x)}
+                          </option>
+
+                        `
+                      )
+                      .join("")
+
                   : `
 
-                    ${
-                      [
-                        "IOAN / ASSURANCE",
-                        "PSB / FULFILLMENT",
-                        "MAINTENANCE / OSP"
-                      ]
-                        .map(
-                          x => `
+                      <option
+                        value="${esc(session.loker)}"
+                        selected
+                      >
+                        ${esc(session.loker)}
+                      </option>
 
-                            <option
-                              value="${esc(x)}"
-                              ${
-                                x ===
-                                selectedLoker
-                                  ? "selected"
-                                  : ""
-                              }
-                            >
-                              ${esc(x)}
-                            </option>
-
-                          `
-                        )
-                        .join("")
-                    }
-
-                  `
+                    `
               }
 
             </select>
@@ -4406,7 +4408,6 @@ async function openTeamEditor(
 
           </label>
 
-
         </div>
 
 
@@ -4417,10 +4418,17 @@ async function openTeamEditor(
 
           <p class="muted">
 
+            Teknisi 1 wajib memiliki
+            ALKER resmi.
+
+            Teknisi 2 / Partner tidak wajib
+            memiliki ALKER.
+
             Partner harus berasal dari
             loker/divisi yang sama.
-            Satu teknisi tidak boleh
-            berada pada dua tim aktif.
+
+            Satu teknisi tidak boleh berada
+            pada dua tim aktif.
 
           </p>
 
@@ -4440,7 +4448,6 @@ async function openTeamEditor(
             Batal
           </button>
 
-
           <button
             type="submit"
             class="btn primary"
@@ -4453,7 +4460,6 @@ async function openTeamEditor(
           </button>
 
         </div>
-
 
       </form>
 
@@ -4471,21 +4477,21 @@ async function openTeamEditor(
     $("teamPartner");
 
 
+  /*
+   * ==========================================
+   * LOAD TEKNISI SESUAI LOKER
+   * ==========================================
+   */
+
   async function reloadTechnicians() {
 
     const selectedTech =
       techSelect.value;
 
-
     const selectedPartner =
       partnerSelect.value;
 
 
-    /*
-     * API team memberikan
-     * semua teknisi untuk role
-     * yang sedang login.
-     */
     const fresh =
       await api(
         "technicianTeam"
@@ -4542,30 +4548,42 @@ async function openTeamEditor(
     `;
 
 
-    if (
+    if(
       list.some(
         x =>
           x.userId ===
           selectedTech
       )
-    ) {
+    ){
+
       techSelect.value =
         selectedTech;
+
     }
 
 
-    if (
+    if(
       list.some(
         x =>
           x.userId ===
           selectedPartner
       )
-    ) {
+    ){
+
       partnerSelect.value =
         selectedPartner;
+
     }
+
+
+    techSelect.onchange();
+
   }
 
+
+  /*
+   * GANTI LOKER
+   */
 
   lokerSelect.onchange =
     async () => {
@@ -4575,15 +4593,22 @@ async function openTeamEditor(
     };
 
 
+  /*
+   * TEKNISI UTAMA
+   */
+
   techSelect.onchange =
     () => {
 
-      if (
+      if(
         partnerSelect.value ===
         techSelect.value
-      ) {
+      ){
+
         partnerSelect.value = "";
+
       }
+
 
       [
         ...partnerSelect.options
@@ -4602,10 +4627,8 @@ async function openTeamEditor(
 
 
   /*
-   * Initial disable self
+   * SUBMIT TEAM
    */
-  techSelect.onchange();
-
 
   $("teamForm").onsubmit =
     async e => {
@@ -4616,26 +4639,36 @@ async function openTeamEditor(
       const technicianId =
         techSelect.value;
 
-
       const partnerId =
         partnerSelect.value;
 
 
-      if (
+      if(!technicianId){
+
+        toast(
+          "Teknisi utama wajib dipilih."
+        );
+
+        return;
+
+      }
+
+
+      if(
         partnerId &&
-        partnerId ===
-          technicianId
-      ) {
+        partnerId === technicianId
+      ){
 
         toast(
           "Teknisi utama dan partner tidak boleh sama."
         );
 
         return;
+
       }
 
 
-      try {
+      try{
 
         await api(
           "saveTechnicianTeam",
@@ -4647,11 +4680,13 @@ async function openTeamEditor(
             technicianId,
 
             partnerId
+
           }
         );
 
 
         closeModal();
+
 
         toast(
           existing
@@ -4660,16 +4695,35 @@ async function openTeamEditor(
         );
 
 
-        renderTeamManage();
+        if(
+          typeof loadTeamManage ===
+          "function"
+        ){
 
-      } catch (err) {
+          await loadTeamManage();
 
-        toast(err.message);
+        }
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal menyimpan tim."
+        );
 
       }
 
     };
+
+
+  /*
+   * LOAD AWAL
+   */
+
+  await reloadTechnicians();
+
 }
+
 /*************************************************
  * NONAKTIFKAN TIM
  *************************************************/
@@ -7168,10 +7222,79 @@ window.showUserForm = function(user = {}){
               isLeader
 
                 ? `
-                  <input
-                    value="${esc(session.loker)}"
-                    readonly
-                  >
+                  <label>
+
+  Loker / Divisi
+
+  ${
+    isLeader
+
+      ? `
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
+
+          <option value="">
+            Pilih Loker / Divisi
+          </option>
+
+          <option value="IOAN / ASSURANCE">
+            IOAN / ASSURANCE
+          </option>
+
+          <option value="PSB / FULFILLMENT">
+            PSB / FULFILLMENT
+          </option>
+
+          <option value="MAINTENANCE / OSP">
+            MAINTENANCE / OSP
+          </option>
+
+        </select>
+      `
+
+      : `
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
+
+          <option value="">
+            Pilih Loker
+          </option>
+
+          <option value="IOAN / ASSURANCE">
+            IOAN / ASSURANCE
+          </option>
+
+          <option value="PSB / FULFILLMENT">
+            PSB / FULFILLMENT
+          </option>
+
+          <option value="MAINTENANCE / OSP">
+            MAINTENANCE / OSP
+          </option>
+
+          <option value="LEADER">
+            LEADER
+          </option>
+
+          <option value="GUDANG">
+            GUDANG
+          </option>
+
+          <option value="ADMIN">
+            ADMIN
+          </option>
+
+        </select>
+      `
+  }
+
+</label>
 
                   <input
                     type="hidden"
