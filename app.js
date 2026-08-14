@@ -3664,15 +3664,14 @@ window.showIssueForm =
  * PENGEMBALIAN
  *
  * TEKNISI:
- * - melihat ALKER tanggung jawabnya
- * - tombol KEMBALIKAN
- * - melihat status pengembalian
+ * - Ajukan pengembalian
+ * - Lihat status
  *
  * SPV GUDANG / ADMIN:
- * - melihat pengajuan
- * - Detail / Foto
- * - Terima
- * - Revisi
+ * - Verifikasi
+ * - Detail foto
+ * - TERIMA
+ * - REVISI
  *************************************************/
 
 async function renderReturns(){
@@ -3692,7 +3691,7 @@ async function renderReturns(){
           ${
             session.role === "TEKNISI"
 
-              ? "Ajukan pengembalian ALKER yang menjadi tanggung jawab Anda."
+              ? "Ajukan dan pantau pengembalian ALKER."
 
               : "Verifikasi pengembalian ALKER dari teknisi."
           }
@@ -3716,7 +3715,9 @@ async function renderReturns(){
   try{
 
     /*
+     * ==========================================
      * TEKNISI
+     * ==========================================
      */
 
     if(
@@ -3760,7 +3761,9 @@ async function renderReturns(){
 
 
     /*
-     * GUDANG / ADMIN
+     * ==========================================
+     * SPV GUDANG / ADMIN
+     * ==========================================
      */
 
     const r =
@@ -4146,6 +4149,1029 @@ function renderTechnicianReturns_(
   `;
 
 }
+/*************************************************
+ * SPV GUDANG
+ * VERIFIKASI PENGEMBALIAN
+ *************************************************/
+
+function renderWarehouseReturns_(
+  returns
+){
+
+  const pending =
+    returns.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
+    );
+
+
+  const approved =
+    returns.filter(
+      x =>
+        x.status ===
+        "DITERIMA GUDANG"
+    );
+
+
+  const revision =
+    returns.filter(
+      x =>
+        x.status ===
+        "REVISI"
+    );
+
+
+  $("returns").innerHTML = `
+
+    <!-- ==============================
+         RINGKASAN
+    =============================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Menunggu Verifikasi",
+        pending.length,
+        "perlu diperiksa"
+      )}
+
+      ${metric(
+        "Diterima Gudang",
+        approved.length,
+        "sudah kembali"
+      )}
+
+      ${metric(
+        "Revisi",
+        revision.length,
+        "dikembalikan ke teknisi"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==============================
+         MENUNGGU VERIFIKASI
+    =============================== -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Menunggu Verifikasi
+          </h3>
+
+          <p class="muted">
+            Periksa kondisi dan foto sebelum
+            ALKER dikembalikan menjadi stok Gudang.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>Tanggal</th>
+
+              <th>Teknisi</th>
+
+              <th>Loker</th>
+
+              <th>ALKER</th>
+
+              <th>Serial Number</th>
+
+              <th>Kondisi</th>
+
+              <th>Aksi</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              pending
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.technician
+                          )}
+                        </strong>
+
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.loker
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.inventoryId
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <button
+                          class="btn secondary"
+                          onclick='showReturnVerificationDetail(${JSON.stringify(x)})'
+                        >
+                          Detail / Foto
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="7">
+
+                    <div class="empty">
+
+                      Tidak ada pengembalian
+                      yang menunggu verifikasi.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==============================
+         RIWAYAT
+    =============================== -->
+
+    <div class="card">
+
+      <h3>
+        Riwayat Verifikasi
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>Tanggal</th>
+
+              <th>Teknisi</th>
+
+              <th>ALKER</th>
+
+              <th>Kondisi</th>
+
+              <th>Status</th>
+
+              <th>Catatan</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              returns
+                .filter(
+                  x =>
+                    x.status !==
+                    "MENUNGGU VERIFIKASI"
+                )
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.technician
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${returnStatusBadge_(
+                          x.status
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.reviewNote ||
+                          x.note ||
+                          "-"
+                        )}
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="6">
+
+                    <div class="empty">
+
+                      Belum ada riwayat verifikasi.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+/*************************************************
+ * DETAIL VERIFIKASI PENGEMBALIAN
+ *************************************************/
+
+window.showReturnVerificationDetail =
+  async x => {
+
+    if(!x){
+      toast(
+        "Data pengembalian tidak ditemukan."
+      );
+      return;
+    }
+
+
+    openModal(
+
+      "Verifikasi Pengembalian",
+
+      `
+
+        <div class="detail-grid">
+
+          ${[
+            [
+              "ID Pengembalian",
+              x.returnId
+            ],
+
+            [
+              "Inventory ID",
+              x.inventoryId
+            ],
+
+            [
+              "Teknisi",
+              x.technician
+            ],
+
+            [
+              "Loker",
+              x.loker
+            ],
+
+            [
+              "ALKER",
+              x.itemName
+            ],
+
+            [
+              "Serial Number",
+              x.serialNumber
+            ],
+
+            [
+              "Kondisi Kembali",
+              x.condition
+            ],
+
+            [
+              "Tanggal",
+              x.date
+            ],
+
+            [
+              "Status",
+              x.status
+            ]
+
+          ]
+            .map(
+              a => `
+
+                <div class="detail-box">
+
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong>
+                    ${esc(
+                      a[1] || "-"
+                    )}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        ${
+          x.note
+
+            ? `
+
+              <div
+                class="card"
+                style="margin-top:15px"
+              >
+
+                <strong>
+                  Catatan Teknisi
+                </strong>
+
+                <p>
+                  ${esc(
+                    x.note
+                  )}
+                </p>
+
+              </div>
+
+            `
+
+            : ""
+        }
+
+
+        <div
+          id="returnPhotoArea"
+          style="margin-top:18px"
+        >
+
+          <div class="empty">
+
+            Memuat foto...
+
+          </div>
+
+        </div>
+
+
+        ${
+          x.status ===
+          "MENUNGGU VERIFIKASI"
+
+            ? `
+
+              <div
+                class="actions"
+                style="
+                  margin-top:20px;
+                  justify-content:flex-end;
+                "
+              >
+
+                <button
+                  class="btn warning"
+                  onclick="
+                    returnDecision(
+                      '${esc(x.returnId)}',
+                      'REVISION'
+                    )
+                  "
+                >
+                  ❌ Revisi
+                </button>
+
+
+                <button
+                  class="btn success"
+                  onclick="
+                    returnDecision(
+                      '${esc(x.returnId)}',
+                      'APPROVE'
+                    )
+                  "
+                >
+                  ✅ Terima
+                </button>
+
+              </div>
+
+            `
+
+            : `
+
+              <div
+                class="card"
+                style="margin-top:15px"
+              >
+
+                ${
+                  returnStatusBadge_(
+                    x.status
+                  )
+                }
+
+                ${
+                  x.reviewNote
+                    ? `
+                      <p
+                        class="muted"
+                        style="margin-top:8px"
+                      >
+                        ${esc(
+                          x.reviewNote
+                        )}
+                      </p>
+                    `
+                    : ""
+                }
+
+              </div>
+
+            `
+
+        }
+
+      `
+
+    );
+
+
+    const photos = [];
+
+
+    /*
+     * FOTO ALKER SAAT PENGEMBALIAN
+     */
+
+    if(
+      x.photoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
+        );
+
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Saat Dikembalikan",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+     * FOTO SERIAL SAAT PENGEMBALIAN
+     */
+
+    if(
+      x.serialPhotoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
+
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Serial Saat Dikembalikan",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+     * FOTO ASAL INVENTORY
+     *
+     * Ambil dari inventory asal.
+     */
+
+    try{
+
+      const invResult =
+        await api(
+          "inventory",
+          {
+            scope:
+              "all"
+          }
+        );
+
+
+      const inv =
+        (invResult.data || [])
+          .find(
+            i =>
+              i.inventoryId ===
+              x.inventoryId
+          );
+
+
+      if(inv){
+
+        if(
+          inv.photoUrl
+        ){
+
+          const dataUrl =
+            await loadPhotoPreview_(
+              inv.photoUrl
+            );
+
+
+          if(dataUrl){
+
+            photos.unshift(
+              photoBox_(
+                "Foto ALKER Saat Diberikan",
+                dataUrl
+              )
+            );
+
+          }
+
+        }
+
+
+        if(
+          inv.serialPhotoUrl
+        ){
+
+          const dataUrl =
+            await loadPhotoPreview_(
+              inv.serialPhotoUrl
+            );
+
+
+          if(dataUrl){
+
+            photos.unshift(
+              photoBox_(
+                "Foto Serial Saat Diberikan",
+                dataUrl
+              )
+            );
+
+          }
+
+        }
+
+      }
+
+    }catch(err){
+
+      console.warn(
+        "Foto inventory awal gagal dimuat:",
+        err.message
+      );
+
+    }
+
+
+    const area =
+      $("returnPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
+
+          ? `
+
+            <div class="photo-grid">
+
+              ${photos.join("")}
+
+            </div>
+
+          `
+
+          : `
+
+            <div class="photo-empty">
+
+              Foto tidak tersedia.
+
+            </div>
+
+          `;
+
+    }
+
+  };
+  
+  /*************************************************
+ * KEPUTUSAN SPV
+ * TERIMA / REVISI
+ *************************************************/
+
+window.returnDecision =
+  async (
+    returnId,
+    decision
+  ) => {
+
+    if(!returnId){
+
+      toast(
+        "ID pengembalian tidak ditemukan."
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * ==========================================
+     * TERIMA
+     * ==========================================
+     */
+
+    if(
+      decision ===
+      "APPROVE"
+    ){
+
+      const yakin =
+        confirm(
+          "Terima pengembalian ALKER ini?\n\n" +
+          "ALKER akan dipindahkan kembali " +
+          "ke stok Gudang."
+        );
+
+
+      if(!yakin){
+        return;
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "returnDecision",
+            {
+
+              returnId:
+                returnId,
+
+              decision:
+                "APPROVE",
+
+              note:
+                "Diterima Gudang."
+
+            }
+          );
+
+
+        closeModal();
+
+
+        toast(
+          r.data?.message ||
+          "Pengembalian diterima."
+        );
+
+
+        await renderReturns();
+
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal menerima pengembalian."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    /*
+     * ==========================================
+     * REVISI
+     * ==========================================
+     */
+
+    if(
+      decision ===
+      "REVISION"
+    ){
+
+      const note =
+        prompt(
+          "Masukkan alasan revisi pengembalian:"
+        );
+
+
+      if(
+        note ===
+        null
+      ){
+
+        return;
+
+      }
+
+
+      if(
+        !note.trim()
+      ){
+
+        toast(
+          "Alasan revisi wajib diisi."
+        );
+
+        return;
+
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "returnDecision",
+            {
+
+              returnId:
+                returnId,
+
+              decision:
+                "REVISION",
+
+              note:
+                note.trim()
+
+            }
+          );
+
+
+        closeModal();
+
+
+        toast(
+          r.data?.message ||
+          "Pengembalian dikembalikan ke teknisi."
+        );
+
+
+        await renderReturns();
+
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal mengirim revisi."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    toast(
+      "Keputusan tidak dikenal."
+    );
+
+  };
+  
+  /*************************************************
+ * STATUS PENGEMBALIAN
+ *************************************************/
+
+function returnStatusBadge_(
+  status
+){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "DITERIMA GUDANG"
+  ){
+
+    return `
+      <span class="badge green">
+        DITERIMA GUDANG
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "REVISI"
+  ){
+
+    return `
+      <span class="badge red">
+        REVISI
+      </span>
+    `;
+
+  }
+
+
+  return badge(
+    status ||
+    "-"
+  );
+
+}
+
 /*************************************************
  * TEAM — TEKNISI SAYA
  *************************************************/
