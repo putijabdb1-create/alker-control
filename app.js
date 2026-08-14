@@ -795,6 +795,9 @@ async function route(name) {
     if (name === "audit")
       return renderAudit();
 
+	if (name === "returnVerification")
+		return renderReturnVerification();
+  
   } catch (e) {
 
     $("page").innerHTML = `
@@ -3657,12 +3660,22 @@ window.showIssueForm =
       };
   };
 
-
 /*************************************************
  * PENGEMBALIAN
+ *
+ * TEKNISI:
+ * - melihat ALKER tanggung jawabnya
+ * - tombol KEMBALIKAN
+ * - melihat status pengembalian
+ *
+ * SPV GUDANG / ADMIN:
+ * - melihat pengajuan
+ * - Detail / Foto
+ * - Terima
+ * - Revisi
  *************************************************/
 
-async function renderReturns() {
+async function renderReturns(){
 
   $("page").innerHTML = `
 
@@ -3675,7 +3688,15 @@ async function renderReturns() {
         </h2>
 
         <p class="muted">
-          Riwayat pengembalian ALKER.
+
+          ${
+            session.role === "TEKNISI"
+
+              ? "Ajukan pengembalian ALKER yang menjadi tanggung jawab Anda."
+
+              : "Verifikasi pengembalian ALKER dari teknisi."
+          }
+
         </p>
 
       </div>
@@ -3684,102 +3705,447 @@ async function renderReturns() {
 
 
     <div id="returns">
+
       Memuat...
+
     </div>
 
   `;
 
 
-  const r =
-    await api(
-      "returns",
-      {
-        scope:
-          session.role === "TEKNISI"
-            ? "mine"
-            : "all"
-      }
+  try{
+
+    /*
+     * TEKNISI
+     */
+
+    if(
+      session.role ===
+      "TEKNISI"
+    ){
+
+      const [
+        invResult,
+        returnResult
+      ] =
+        await Promise.all([
+
+          api(
+            "inventory",
+            {
+              scope:
+                "mine"
+            }
+          ),
+
+          api(
+            "returns",
+            {
+              scope:
+                "mine"
+            }
+          )
+
+        ]);
+
+
+      renderTechnicianReturns_(
+        invResult.data || [],
+        returnResult.data || []
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * GUDANG / ADMIN
+     */
+
+    const r =
+      await api(
+        "returns",
+        {
+          scope:
+            "all"
+        }
+      );
+
+
+    renderWarehouseReturns_(
+      r.data || []
+    );
+
+
+  }catch(err){
+
+    $("returns").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat pengembalian
+        </strong>
+
+        <p class="danger-text">
+          ${esc(
+            err.message
+          )}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+function renderTechnicianReturns_(
+  inventory,
+  returns
+){
+
+  const pending =
+    returns.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
+    );
+
+
+  const revision =
+    returns.filter(
+      x =>
+        x.status ===
+        "REVISI"
+    );
+
+
+  /*
+   * Inventory yang masih DIPAKAI
+   * dapat dikembalikan.
+   */
+
+  const canReturn =
+    inventory.filter(
+      x =>
+        x.location ===
+          "TEKNISI" &&
+
+        x.holderId ===
+          session.userId &&
+
+        x.status ===
+          "DIPAKAI"
     );
 
 
   $("returns").innerHTML = `
 
-    <div class="table-wrap">
+    <div class="grid cards">
 
-      <table class="table">
+      ${metric(
+        "ALKER Saya",
+        inventory.length,
+        "inventory"
+      )}
 
-        <thead>
+      ${metric(
+        "Menunggu Gudang",
+        pending.length,
+        "verifikasi"
+      )}
 
-          <tr>
+      ${metric(
+        "Perlu Revisi",
+        revision.length,
+        "pengembalian"
+      )}
 
-            <th>Tanggal</th>
-            <th>Inventory</th>
-            <th>Alker</th>
-            <th>Kondisi</th>
-            <th>Status</th>
+    </div>
 
-          </tr>
 
-        </thead>
+    <div style="height:15px"></div>
 
-        <tbody>
 
-          ${
-            (r.data || [])
-              .map(
-                x => `
+    <div class="card">
 
-                  <tr>
+      <h3>
+        ALKER yang Dapat Dikembalikan
+      </h3>
 
-                    <td>
-                      ${esc(x.date)}
-                    </td>
+      <p class="muted">
+        Pilih ALKER yang benar-benar
+        sudah Anda serahkan ke Gudang.
+      </p>
 
-                    <td>
-                      ${esc(x.inventoryId)}
-                    </td>
 
-                    <td>
-                      ${esc(x.itemName)}
-                    </td>
+      <div class="table-wrap">
 
-                    <td>
-                      ${badge(x.condition)}
-                    </td>
+        <table class="table">
 
-                    <td>
-                      ${badge(x.status)}
-                    </td>
+          <thead>
 
-                  </tr>
+            <tr>
 
-                `
-              )
-              .join("") ||
+              <th>ALKER</th>
+              <th>Merk / Type</th>
+              <th>Serial Number</th>
+              <th>Kondisi</th>
+              <th>Status</th>
+              <th>Aksi</th>
 
-            `<tr>
+            </tr>
 
-              <td colspan="5">
+          </thead>
 
-                <div class="empty">
-                  Belum ada pengembalian.
-                </div>
 
-              </td>
+          <tbody>
 
-            </tr>`
-          }
+            ${
+              canReturn
+                .map(
+                  x => `
 
-        </tbody>
+                    <tr>
 
-      </table>
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.brand ||
+                          "-"
+                        )}
+
+                        /
+
+                        ${esc(
+                          x.type ||
+                          "-"
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${badge(
+                          x.condition
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${badge(
+                          x.status
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        <button
+                          class="btn warning"
+                          onclick='showReturnForm(${JSON.stringify(x)})'
+                        >
+                          ↩ Kembalikan
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `<tr>
+
+                <td colspan="6">
+
+                  <div class="empty">
+
+                    Tidak ada ALKER
+                    yang siap dikembalikan.
+
+                  </div>
+
+                </td>
+
+              </tr>`
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <h3>
+        Riwayat Pengembalian
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>Tanggal</th>
+              <th>ALKER</th>
+              <th>Kondisi</th>
+              <th>Status</th>
+              <th>Keterangan</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              returns
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+                      <td>
+                        ${returnStatusBadge_(
+                          x.status
+                        )}
+                      </td>
+
+                      <td>
+
+                        ${
+                          x.status ===
+                          "REVISI"
+
+                            ? `
+                              <span class="danger-text">
+                                ${esc(
+                                  x.reviewNote ||
+                                  "Mohon perbaiki."
+                                )}
+                              </span>
+                            `
+
+                            : esc(
+                                x.reviewNote ||
+                                x.note ||
+                                "-"
+                              )
+                        }
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `<tr>
+
+                <td colspan="5">
+
+                  <div class="empty">
+                    Belum ada riwayat pengembalian.
+                  </div>
+
+                </td>
+
+              </tr>`
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
 
     </div>
 
   `;
+
 }
-
-
 /*************************************************
  * TEAM — TEKNISI SAYA
  *************************************************/
@@ -9233,3 +9599,319 @@ window.showMasterPriceForm =
       };
 
   };
+  window.showReturnForm =
+  async inventory => {
+
+    openModal(
+
+      "Pengembalian ALKER",
+
+      `
+
+        <div class="card"
+             style="margin-bottom:15px">
+
+          <strong>
+            ${esc(
+              inventory.itemName
+            )}
+          </strong>
+
+          <div class="small muted">
+
+            ID:
+            ${esc(
+              inventory.inventoryId
+            )}
+
+            <br>
+
+            SN:
+            ${esc(
+              inventory.serialNumber ||
+              "-"
+            )}
+
+          </div>
+
+        </div>
+
+
+        <form id="returnForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Kondisi Saat Dikembalikan
+
+              <select
+                name="condition"
+                required
+              >
+
+                <option value="BAIK">
+                  BAIK
+                </option>
+
+                <option value="RUSAK RINGAN">
+                  RUSAK RINGAN
+                </option>
+
+                <option value="RUSAK BERAT">
+                  RUSAK BERAT
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Foto ALKER
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                required
+              >
+
+              <small class="muted">
+                Wajib foto kondisi ALKER
+                saat diserahkan.
+              </small>
+
+            </label>
+
+
+            <label>
+
+              Foto Serial / Label
+
+              <input
+                name="serialPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+              <small class="muted">
+                Opsional.
+              </small>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+                placeholder="Keterangan kondisi ALKER saat dikembalikan..."
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="card"
+            style="
+              margin-top:15px;
+              background:#fff8e1;
+            "
+          >
+
+            <strong>
+              ⚠️ Perhatian
+            </strong>
+
+            <p class="muted">
+
+              Setelah dikirim, ALKER akan
+              berstatus
+              <strong>
+                MENUNGGU VERIFIKASI
+              </strong>.
+
+              ALKER belum menjadi stok Gudang
+              sampai diverifikasi oleh SPV Gudang.
+
+            </p>
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn warning"
+            >
+              Kirim Pengembalian
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("returnForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try{
+
+          const photo =
+            await fileToBase64(
+              f.photo.files[0]
+            );
+
+
+          if(!photo){
+
+            throw new Error(
+              "Foto ALKER wajib diupload."
+            );
+
+          }
+
+
+          const serialPhoto =
+            f.serialPhoto.files[0]
+              ? await fileToBase64(
+                  f.serialPhoto.files[0]
+                )
+              : "";
+
+
+          await api(
+            "returnItem",
+            {
+
+              inventoryId:
+                inventory.inventoryId,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                photo,
+
+              serialPhoto:
+                serialPhoto
+
+            }
+          );
+
+
+          closeModal();
+
+
+          toast(
+            "Pengembalian berhasil diajukan ke Gudang."
+          );
+
+
+          await renderReturns();
+
+
+        }catch(err){
+
+          toast(
+            err.message ||
+            "Gagal mengajukan pengembalian."
+          );
+
+        }
+
+      };
+
+  };
+  function returnStatusBadge_(
+  status
+){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "DITERIMA GUDANG"
+  ){
+
+    return `
+      <span class="badge green">
+        DITERIMA GUDANG
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "REVISI"
+  ){
+
+    return `
+      <span class="badge red">
+        REVISI
+      </span>
+    `;
+
+  }
+
+
+  return badge(
+    status || "-"
+  );
+
+}
