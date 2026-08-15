@@ -2635,6 +2635,60 @@ window.showInventoryDetail =
  *    -> Masuk proses pengadaan
  *************************************************/
 
+
+/*************************************************
+ * MASTER MEREK SPlicer
+ *************************************************/
+
+const SPlicer_BRANDS_UI = [
+  "Sumitomo",
+  "Jointwit",
+  "Fujikura",
+  "INO",
+  "ADV",
+  "TUMTEC"
+];
+
+function isSplicerItem_(itemName){
+  return String(itemName || "").trim().toLowerCase() === "splicer";
+}
+
+function splicerBrandFieldHtml_(item, value = "", id = ""){
+  if(!isSplicerItem_(item?.itemName)){
+    return `
+      <input
+        name="brand"
+        ${id ? `id="${id}"` : ""}
+        value="${esc(value || "")}"
+      >
+    `;
+  }
+
+  return `
+    <select
+      name="brand"
+      ${id ? `id="${id}"` : ""}
+      required
+    >
+      <option value="">Pilih Merek Splicer</option>
+      ${
+        SPlicer_BRANDS_UI.map(b => `
+          <option
+            value="${esc(b)}"
+            ${
+              String(value || "").toLowerCase() === b.toLowerCase()
+                ? "selected"
+                : ""
+            }
+          >
+            ${esc(b)}
+          </option>
+        `).join("")
+      }
+    </select>
+  `;
+}
+
 window.showInitialForm =
   async () => {
 
@@ -2741,10 +2795,12 @@ window.showInitialForm =
 
                   Merk
 
+                  <div id="initialBrandWrap">
                   <input
                     name="brand"
                     id="initialBrand"
                   >
+                </div>
 
                 </label>
 
@@ -8077,9 +8133,11 @@ window.showReceivingForm =
 
               Merk
 
-              <input
-                name="brand"
-              >
+              <div id="receivingBrandWrap">
+                <input
+                  name="brand"
+                >
+              </div>
 
             </label>
 
@@ -8344,7 +8402,7 @@ window.showReceivingForm =
      */
 
     const updateMasterPriceDisplay =
-      () => {
+      async () => {
 
         const selectedItem =
           items.find(
@@ -8354,6 +8412,93 @@ window.showReceivingForm =
                 itemSelect.value
               )
           );
+
+
+        if(isSplicerItem_(selectedItem?.itemName)){
+
+          const brandInput =
+            form.querySelector(
+              '[name="brand"]'
+            );
+
+          const brand =
+            String(
+              brandInput?.value ||
+              ""
+            ).trim();
+
+
+          if(!brand){
+
+            if(priceInput){
+              priceInput.value =
+                "Pilih merek Splicer";
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                "Pilih merek Splicer";
+            }
+
+            return;
+
+          }
+
+
+          try{
+
+            const r =
+              await api(
+                "masterBrandPrices",
+                {
+                  itemId:
+                    selectedItem.itemId
+                }
+              );
+
+            const variant =
+              (r.data || []).find(
+                x =>
+                  String(x.brand || "")
+                    .toLowerCase() ===
+                  brand.toLowerCase()
+              );
+
+            const formatted =
+              variant
+                ? formatRupiah(
+                    variant.price
+                  )
+                : "Harga belum ditentukan";
+
+            if(priceInput){
+              priceInput.value =
+                formatted;
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                formatted;
+            }
+
+          }catch(err){
+
+            if(priceInput){
+              priceInput.value =
+                "Harga belum tersedia";
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                err.message ||
+                "Harga belum tersedia";
+            }
+
+          }
+
+          return;
+
+        }
 
 
         const price =
@@ -8371,18 +8516,14 @@ window.showReceivingForm =
 
 
         if(priceInput){
-
           priceInput.value =
             formatted;
-
         }
 
 
         if(priceInfo){
-
           priceInfo.textContent =
             formatted;
-
         }
 
       };
@@ -8390,19 +8531,65 @@ window.showReceivingForm =
 
     /*
      * ==========================================
-     * SAAT ALKER DIGANTI
+     * SAAT ALKER / MEREK DIGANTI
      * ==========================================
      */
 
     itemSelect.onchange =
-      updateMasterPriceDisplay;
+      async () => {
+
+        const selectedItem =
+          items.find(
+            x =>
+              String(x.itemId) ===
+              String(itemSelect.value)
+          );
+
+        const wrap =
+          $("receivingBrandWrap");
+
+        if(wrap){
+
+          const currentBrand =
+            wrap.querySelector(
+              '[name="brand"]'
+            )?.value || "";
+
+          wrap.innerHTML =
+            splicerBrandFieldHtml_(
+              selectedItem,
+              currentBrand
+            );
+
+        }
+
+        await updateMasterPriceDisplay();
+
+      };
+
+
+    form.addEventListener(
+      "change",
+      async e => {
+
+        if(
+          e.target?.name ===
+          "brand"
+        ){
+
+          await updateMasterPriceDisplay();
+
+        }
+
+      }
+    );
 
 
     /*
      * Tampilkan harga pertama
      */
 
-    updateMasterPriceDisplay();
+    await updateMasterPriceDisplay();
 
 
     /*
@@ -11042,13 +11229,7 @@ window.showInitialVerificationDetail =
 
               Merk
 
-              <input
-                name="brand"
-                value="${esc(
-                  initial.brand ||
-                  ""
-                )}"
-              >
+              <div id="revisionBrandWrap">                  <input                    name="brand"                    value="${esc(                      initial.brand ||                      ""                    )}"                  >                </div>
 
             </label>
 
@@ -11197,7 +11378,25 @@ window.showInitialVerificationDetail =
     );
 
 
-    $("initialRevisionForm").onsubmit =
+  
+  const revisionBrandWrap =
+    $("revisionBrandWrap");
+
+  if(revisionBrandWrap){
+
+    const revisionItem = {
+      itemName: initial.itemName
+    };
+
+    revisionBrandWrap.innerHTML =
+      splicerBrandFieldHtml_(
+        revisionItem,
+        initial.brand || ""
+      );
+
+  }
+
+  $("initialRevisionForm").onsubmit =
       async e => {
 
         e.preventDefault();
@@ -11276,9 +11475,7 @@ async function renderMasterPrice() {
         </h2>
 
         <p class="muted">
-          Gudang menentukan nilai aset berdasarkan
-          nama ALKER. Harga ini akan digunakan
-          sebagai nilai master inventory.
+          Gudang menentukan nilai aset berdasarkan nama ALKER. Splicer memiliki harga berbeda berdasarkan merek.
         </p>
 
       </div>
@@ -11438,7 +11635,11 @@ async function renderMasterPrice() {
                 <td>
 
                   <strong>
-                    ${money(x.price)}
+                    ${
+                      x.priceMode === "BY_BRAND"
+                        ? "Per Merek"
+                        : money(x.price)
+                    }
                   </strong>
 
                 </td>
@@ -11455,12 +11656,25 @@ async function renderMasterPrice() {
 
                 <td>
 
-                  <button
-                    class="btn secondary"
-                    onclick='showMasterPriceForm(${JSON.stringify(x)})'
-                  >
-                    Ubah Harga
-                  </button>
+                  ${
+                    x.priceMode === "BY_BRAND"
+                      ? `
+                        <button
+                          class="btn secondary"
+                          onclick='showSplicerBrandPriceForm(${JSON.stringify(x)})'
+                        >
+                          Harga per Merek
+                        </button>
+                      `
+                      : `
+                        <button
+                          class="btn secondary"
+                          onclick='showMasterPriceForm(${JSON.stringify(x)})'
+                        >
+                          Ubah Harga
+                        </button>
+                      `
+                  }
 
                 </td>
 
@@ -11522,6 +11736,170 @@ async function renderMasterPrice() {
 /*************************************************
  * FORM UBAH HARGA MASTER
  *************************************************/
+
+
+window.showSplicerBrandPriceForm =
+  async x => {
+
+    try{
+
+      const r =
+        await api(
+          "masterBrandPrices",
+          {
+            itemId:
+              x.itemId
+          }
+        );
+
+      const brands =
+        r.data || [];
+
+      openModal(
+        "Harga Splicer per Merek",
+        `
+          <div class="card">
+
+            <div class="detail-grid">
+
+              <div class="detail-box">
+                <span>ID ALKER</span>
+                <strong>${esc(x.itemId || "-")}</strong>
+              </div>
+
+              <div class="detail-box">
+                <span>ALKER</span>
+                <strong>${esc(x.itemName || "Splicer")}</strong>
+              </div>
+
+            </div>
+
+          </div>
+
+          <form
+            id="splicerBrandPriceForm"
+            style="margin-top:15px"
+          >
+
+            ${brands.map(b => `
+              <label style="margin-bottom:10px">
+
+                ${esc(b.brand)}
+
+                <input
+                  type="number"
+                  min="0"
+                  name="price_${esc(b.priceId)}"
+                  data-price-id="${esc(b.priceId)}"
+                  data-brand="${esc(b.brand)}"
+                  value="${Number(b.price || 0)}"
+                  required
+                >
+
+              </label>
+            `).join("")}
+
+            <div
+              class="actions"
+              style="margin-top:15px"
+            >
+
+              <button
+                type="button"
+                class="btn secondary"
+                onclick="closeModal()"
+              >
+                Batal
+              </button>
+
+              <button
+                type="submit"
+                class="btn primary"
+              >
+                Simpan Semua Harga
+              </button>
+
+            </div>
+
+          </form>
+        `
+      );
+
+      $("splicerBrandPriceForm").onsubmit =
+        async e => {
+
+          e.preventDefault();
+
+          const f = e.target;
+          const btn =
+            f.querySelector(
+              'button[type="submit"]'
+            );
+
+          if(btn?.disabled) return;
+
+          if(btn){
+            btn.disabled = true;
+            btn.textContent =
+              "⏳ Menyimpan...";
+          }
+
+          try{
+
+            const prices =
+              [...f.querySelectorAll(
+                "input[data-brand]"
+              )].map(input => ({
+                brand:
+                  input.dataset.brand,
+                price:
+                  input.value
+              }));
+
+            await api(
+              "updateMasterBrandPrices",
+              {
+                itemId:
+                  x.itemId,
+                prices
+              }
+            );
+
+            closeModal();
+
+            toast(
+              "Harga Splicer per merek berhasil diperbarui."
+            );
+
+            await renderMasterPrice();
+
+          }catch(err){
+
+            if(btn){
+              btn.disabled = false;
+              btn.textContent =
+                "Simpan Semua Harga";
+            }
+
+            toast(
+              err.message ||
+              "Gagal mengubah harga Splicer."
+            );
+
+          }
+
+        };
+
+    }catch(err){
+
+      toast(
+        err.message ||
+        "Gagal memuat harga Splicer."
+      );
+
+    }
+
+  };
 
 window.showMasterPriceForm =
   x => {
