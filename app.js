@@ -8121,8 +8121,6 @@ window.showInitialVerificationDetail =
               </select>
 
             </label>
-
-
             <label class="full-col">
 
               Keterangan
@@ -8135,8 +8133,6 @@ window.showInitialVerificationDetail =
               )}</textarea>
 
             </label>
-
-
             <label>
 
               Foto Alker Baru
@@ -8165,8 +8161,6 @@ window.showInitialVerificationDetail =
             </label>
 
           </div>
-
-
           <div
             class="actions"
             style="margin-top:15px"
@@ -8194,7 +8188,6 @@ window.showInitialVerificationDetail =
       `
     );
 
-
     $("initialRevisionForm").onsubmit =
       async e => {
 
@@ -8202,8 +8195,6 @@ window.showInitialVerificationDetail =
 
         const f =
           e.target;
-
-
         try{
 
           await api(
@@ -8237,30 +8228,19 @@ window.showInitialVerificationDetail =
                 await fileToBase64(
                   f.serialPhoto.files[0]
                 )
-
             }
           );
-
-
           closeModal();
-
-
           toast(
             "Perbaikan berhasil dikirim ke Gudang."
           );
-
-
           renderMyInventory();
-
-
         }catch(err){
 
           toast(
             err.message
           );
-
         }
-
       };
 
   };
