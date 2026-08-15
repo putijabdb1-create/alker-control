@@ -10061,16 +10061,29 @@ window.showUserForm = function(user = {}){
   ${
     isLeader
       ? `
-        <input
-          value="${esc(session.loker)}"
-          readonly
+        <select
+          name="loker"
+          id="userLoker"
+          required
         >
 
-        <input
-          type="hidden"
-          name="loker"
-          value="${esc(session.loker)}"
-        >
+          <option value="">
+            Pilih Loker / Divisi
+          </option>
+
+          <option value="IOAN / ASSURANCE" ${user.loker === "IOAN / ASSURANCE" ? "selected" : ""}>
+            IOAN / ASSURANCE
+          </option>
+
+          <option value="PSB / FULFILLMENT" ${user.loker === "PSB / FULFILLMENT" ? "selected" : ""}>
+            PSB / FULFILLMENT
+          </option>
+
+          <option value="MAINTENANCE / OSP" ${user.loker === "MAINTENANCE / OSP" ? "selected" : ""}>
+            MAINTENANCE / OSP
+          </option>
+
+        </select>
       `
       : `
         <select
@@ -10083,27 +10096,27 @@ window.showUserForm = function(user = {}){
             Pilih Loker
           </option>
 
-          <option value="IOAN / ASSURANCE">
+          <option value="IOAN / ASSURANCE" ${user.loker === "IOAN / ASSURANCE" ? "selected" : ""}>
             IOAN / ASSURANCE
           </option>
 
-          <option value="PSB / FULFILLMENT">
+          <option value="PSB / FULFILLMENT" ${user.loker === "PSB / FULFILLMENT" ? "selected" : ""}>
             PSB / FULFILLMENT
           </option>
 
-          <option value="MAINTENANCE / OSP">
+          <option value="MAINTENANCE / OSP" ${user.loker === "MAINTENANCE / OSP" ? "selected" : ""}>
             MAINTENANCE / OSP
           </option>
 
-          <option value="LEADER">
+          <option value="LEADER" ${user.loker === "LEADER" ? "selected" : ""}>
             LEADER
           </option>
 
-          <option value="GUDANG">
+          <option value="GUDANG" ${user.loker === "GUDANG" ? "selected" : ""}>
             GUDANG
           </option>
 
-          <option value="ADMIN">
+          <option value="ADMIN" ${user.loker === "ADMIN" ? "selected" : ""}>
             ADMIN
           </option>
 
