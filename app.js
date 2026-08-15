@@ -830,7 +830,7 @@ async function route(name) {
  * DASHBOARD
  *************************************************/
 
-async function renderDashboard() {
+async function renderDashboard(){
 
   $("page").innerHTML = `
 
@@ -843,32 +843,337 @@ async function renderDashboard() {
         </h2>
 
         <div class="muted">
-          ${esc(session.loker || "Semua")}
+
+          ${esc(
+            session.loker ||
+            "Semua"
+          )}
+
           •
-          ${esc(session.name)}
+
+          ${esc(
+            session.name
+          )}
+
         </div>
 
       </div>
 
     </div>
 
+
     <div id="dashBody">
+
       <div class="card">
         Memuat dashboard...
       </div>
+
     </div>
 
   `;
 
 
-  const r =
-    await api("dashboard");
+  try{
 
-  const d =
-    r.data || {};
+    const r =
+      await api(
+        "dashboard"
+      );
+
+
+    const d =
+      r.data || {};
+
+
+    /*
+     * ======================================
+     * DASHBOARD TEKNISI
+     * ======================================
+     */
+
+    if(
+      session.role ===
+      "TEKNISI"
+    ){
+
+      renderTechnicianDashboard_(
+        d
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * ======================================
+     * DASHBOARD ROLE LAIN
+     * ======================================
+     */
+
+    $("dashBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "Total Inventory",
+          d.totalInventory || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Di Gudang",
+          d.inWarehouse || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Di Teknisi",
+          d.withTechnicians || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Nilai Aset",
+          money(
+            d.totalValue || 0
+          ),
+          "inventory"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="grid two">
+
+        <div class="card">
+
+          <h3>
+            Ringkasan Kondisi
+          </h3>
+
+
+          ${
+            Object.entries(
+              d.conditions || {}
+            )
+              .map(
+                ([k,v]) => `
+
+                  <div class="kpi-line">
+
+                    <span>
+                      ${esc(k)}
+                    </span>
+
+                    <strong>
+                      ${v}
+                    </strong>
+
+                  </div>
+
+                `
+              )
+              .join("") ||
+
+            `
+              <div class="empty">
+                Belum ada data.
+              </div>
+            `
+          }
+
+        </div>
+
+
+        <div class="card">
+
+          <h3>
+            Aktivitas Menunggu
+          </h3>
+
+
+          ${
+            Object.entries(
+              d.pending || {}
+            )
+              .map(
+                ([k,v]) => `
+
+                  <div class="kpi-line">
+
+                    <span>
+                      ${esc(k)}
+                    </span>
+
+                    <strong>
+                      ${v}
+                    </strong>
+
+                  </div>
+
+                `
+              )
+              .join("") ||
+
+            `
+              <div class="empty">
+                Tidak ada aktivitas.
+              </div>
+            `
+          }
+
+        </div>
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <h3>
+          Posisi Inventory
+        </h3>
+
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+
+              <tr>
+
+                <th>LOKER / LOKASI</th>
+                <th>JUMLAH</th>
+                <th>NILAI</th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody>
+
+              ${
+                (d.locations || [])
+                  .map(
+                    x => `
+
+                      <tr>
+
+                        <td>
+                          ${esc(
+                            x.name
+                          )}
+                        </td>
+
+                        <td>
+                          ${x.count}
+                        </td>
+
+                        <td>
+                          ${money(
+                            x.value
+                          )}
+                        </td>
+
+                      </tr>
+
+                    `
+                  )
+                  .join("") ||
+
+                `
+                  <tr>
+
+                    <td colspan="3">
+
+                      <div class="empty">
+                        Belum ada inventory.
+                      </div>
+
+                    </td>
+
+                  </tr>
+                `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+  }catch(e){
+
+    $("dashBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat dashboard
+        </strong>
+
+        <p class="danger-text">
+
+          ${esc(
+            e.message
+          )}
+
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+
+/*************************************************
+ * DASHBOARD TEKNISI
+ * STATUS ALKER PER LOKER
+ *************************************************/
+
+function renderTechnicianDashboard_(
+  d
+){
+
+  const r =
+    d.technicianReport || {
+
+      total: 0,
+
+      reported: 0,
+
+      pending: 0,
+
+      revision: 0,
+
+      notGiven: 0,
+
+      notReported: 0,
+
+      items: []
+
+    };
 
 
   $("dashBody").innerHTML = `
+
+    <!-- ==================================
+         RINGKASAN INVENTORY
+    =================================== -->
 
     <div class="grid cards">
 
@@ -878,11 +1183,13 @@ async function renderDashboard() {
         "unit"
       )}
 
+
       ${metric(
         "Di Gudang",
         d.inWarehouse || 0,
         "unit"
       )}
+
 
       ${metric(
         "Di Teknisi",
@@ -890,9 +1197,12 @@ async function renderDashboard() {
         "unit"
       )}
 
+
       ${metric(
         "Nilai Aset",
-        money(d.totalValue),
+        money(
+          d.totalValue || 0
+        ),
         "inventory"
       )}
 
@@ -902,44 +1212,138 @@ async function renderDashboard() {
     <div style="height:15px"></div>
 
 
+    <!-- ==================================
+         STATUS ALKER
+    =================================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Sudah Dilaporkan",
+        r.reported,
+        "ALKER resmi"
+      )}
+
+
+      ${metric(
+        "Menunggu Verifikasi",
+        r.pending,
+        "diproses Gudang"
+      )}
+
+
+      ${metric(
+        "Perlu Revisi",
+        r.revision,
+        "perbaiki laporan"
+      )}
+
+
+      ${metric(
+        "Belum Dilaporkan",
+        r.notReported,
+        "belum ada laporan"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         STATUS PEMBERIAN
+    =================================== -->
+
     <div class="grid two">
 
       <div class="card">
 
         <h3>
-          Ringkasan Kondisi
+          Status ALKER Saya
         </h3>
 
-        ${
-          Object.entries(
-            d.conditions || {}
-          )
-            .map(
-              ([k, v]) => `
+        <p class="muted">
 
-                <div class="kpi-line">
+          Daftar ALKER yang berlaku
+          untuk ${esc(
+            session.loker ||
+            "-"
+          )}.
 
-                  <span>
-                    ${esc(k)}
-                  </span>
+        </p>
 
-                  <strong>
-                    ${v}
-                  </strong>
 
-                </div>
+        <div class="kpi-line">
 
-              `
-            )
-            .join("") ||
+          <span>
+            Sudah dilaporkan
+          </span>
 
-          `<div class="empty">
-             Belum ada data.
-           </div>`
-        }
+          <strong>
+            ${r.reported}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Menunggu verifikasi
+          </span>
+
+          <strong>
+            ${r.pending}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Perlu revisi
+          </span>
+
+          <strong>
+            ${r.revision}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Belum diberikan
+          </span>
+
+          <strong>
+            ${r.notGiven}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Belum dilaporkan
+          </span>
+
+          <strong>
+            ${r.notReported}
+          </strong>
+
+        </div>
 
       </div>
 
+
+      <!-- ==================================
+           AKTIVITAS
+      =================================== -->
 
       <div class="card">
 
@@ -947,12 +1351,13 @@ async function renderDashboard() {
           Aktivitas Menunggu
         </h3>
 
+
         ${
           Object.entries(
             d.pending || {}
           )
             .map(
-              ([k, v]) => `
+              ([k,v]) => `
 
                 <div class="kpi-line">
 
@@ -970,9 +1375,11 @@ async function renderDashboard() {
             )
             .join("") ||
 
-          `<div class="empty">
-             Tidak ada.
-           </div>`
+          `
+            <div class="empty">
+              Tidak ada aktivitas.
+            </div>
+          `
         }
 
       </div>
@@ -983,11 +1390,32 @@ async function renderDashboard() {
     <div style="height:15px"></div>
 
 
+    <!-- ==================================
+         DAFTAR ALKER
+    =================================== -->
+
     <div class="card">
 
-      <h3>
-        Posisi Inventory
-      </h3>
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Daftar ALKER Loker
+          </h3>
+
+          <p class="muted">
+
+            Anda dapat langsung melihat
+            ALKER mana yang sudah dan
+            belum dilaporkan.
+
+          </p>
+
+        </div>
+
+      </div>
+
 
       <div class="table-wrap">
 
@@ -996,12 +1424,194 @@ async function renderDashboard() {
           <thead>
 
             <tr>
-              <th>Loker/Lokasi</th>
-              <th>Jumlah</th>
-              <th>Nilai</th>
+
+              <th>ALKER</th>
+
+              <th>STATUS PELAPORAN</th>
+
+              <th>KONDISI</th>
+
+              <th>INVENTORY</th>
+
+              <th>CATATAN</th>
+
             </tr>
 
           </thead>
+
+
+          <tbody>
+
+            ${
+              (r.items || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.category ||
+                            "-"
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        ${technicianReportBadge_(
+                          x.status
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.condition
+                            ? badge(
+                                x.condition
+                              )
+                            : `
+                              <span class="badge gray">
+                                -
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.inventoryId
+
+                            ? `
+
+                              <strong>
+                                ${esc(
+                                  x.inventoryId
+                                )}
+                              </strong>
+
+                            `
+
+                            : `
+                              <span class="muted">
+                                -
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.reviewNote
+
+                            ? esc(
+                                x.reviewNote
+                              )
+
+                            : x.status ===
+                                "BELUM DILAPORKAN"
+
+                              ? "Belum ada laporan."
+
+                              : x.status ===
+                                  "BELUM DIBERIKAN"
+
+                                ? "Belum menerima ALKER."
+
+                                : "-"
+
+                        }
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+
+                <tr>
+
+                  <td colspan="5">
+
+                    <div class="empty">
+
+                      Belum ada daftar ALKER
+                      untuk loker ini.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         POSISI INVENTORY
+    =================================== -->
+
+    <div class="card">
+
+      <h3>
+        Posisi Inventory
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>LOKER / LOKASI</th>
+
+              <th>JUMLAH</th>
+
+              <th>NILAI</th>
+
+            </tr>
+
+          </thead>
+
 
           <tbody>
 
@@ -1013,7 +1623,9 @@ async function renderDashboard() {
                     <tr>
 
                       <td>
-                        ${esc(x.name)}
+                        ${esc(
+                          x.name
+                        )}
                       </td>
 
                       <td>
@@ -1021,7 +1633,9 @@ async function renderDashboard() {
                       </td>
 
                       <td>
-                        ${money(x.value)}
+                        ${money(
+                          x.value
+                        )}
                       </td>
 
                     </tr>
@@ -1030,13 +1644,19 @@ async function renderDashboard() {
                 )
                 .join("") ||
 
-              `<tr>
-                <td colspan="3">
-                  <div class="empty">
-                    Belum ada inventory.
-                  </div>
-                </td>
-              </tr>`
+              `
+                <tr>
+
+                  <td colspan="3">
+
+                    <div class="empty">
+                      Belum ada inventory.
+                    </div>
+
+                  </td>
+
+                </tr>
+              `
             }
 
           </tbody>
@@ -1048,8 +1668,87 @@ async function renderDashboard() {
     </div>
 
   `;
+
 }
 
+
+/*************************************************
+ * BADGE STATUS ALKER TEKNISI
+ *************************************************/
+
+function technicianReportBadge_(
+  status
+){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "SUDAH DILAPORKAN"
+  ){
+
+    return `
+      <span class="badge green">
+        SUDAH DILAPORKAN
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "PERLU REVISI"
+  ){
+
+    return `
+      <span class="badge red">
+        PERLU REVISI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "BELUM DIBERIKAN"
+  ){
+
+    return `
+      <span class="badge blue">
+        BELUM DIBERIKAN
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge gray">
+      BELUM DILAPORKAN
+    </span>
+  `;
+
+}
 
 function metric(a, b, c) {
 
@@ -6445,14 +7144,19 @@ window.rejectRequest =
 
 /*************************************************
  * GUDANG
+ * STOK PER ALKER
  *************************************************/
 
-async function renderWarehouse() {
+async function renderWarehouse(){
 
   const r =
     await api(
       "warehouse"
     );
+
+
+  const d =
+    r.data || {};
 
 
   $("page").innerHTML = `
@@ -6466,8 +7170,8 @@ async function renderWarehouse() {
         </h2>
 
         <p class="muted">
-          Stok aktual yang berada
-          di lokasi GUDANG.
+          Stok aktual berdasarkan jenis ALKER
+          dan kondisi fisiknya.
         </p>
 
       </div>
@@ -6483,31 +7187,38 @@ async function renderWarehouse() {
     </div>
 
 
+    <!-- ==================================
+         RINGKASAN GUDANG
+    =================================== -->
+
     <div class="grid cards">
 
       ${metric(
-        "Item Gudang",
-        r.data.summary.count,
+        "Total Unit Gudang",
+        d.summary?.count || 0,
         "unit"
       )}
+
 
       ${metric(
         "Nilai Stok",
         money(
-          r.data.summary.value
+          d.summary?.value || 0
         ),
         "inventory"
       )}
 
+
       ${metric(
         "Request",
-        r.data.summary.requests,
+        d.summary?.requests || 0,
         "menunggu"
       )}
 
+
       ${metric(
         "Pengadaan",
-        r.data.summary.procurement,
+        d.summary?.procurement || 0,
         "aktif"
       )}
 
@@ -6517,15 +7228,240 @@ async function renderWarehouse() {
     <div style="height:15px"></div>
 
 
-    ${warehouseTable(
-      r.data.items || []
-    )}
+    <!-- ==================================
+         STOK PER ALKER
+    =================================== -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Ketersediaan ALKER
+          </h3>
+
+          <p class="muted">
+            Menampilkan jumlah dan kondisi
+            setiap jenis ALKER yang tersedia
+            di Gudang.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>ALKER</th>
+
+              <th>TOTAL</th>
+
+              <th>BAIK</th>
+
+              <th>RUSAK RINGAN</th>
+
+              <th>RUSAK BERAT</th>
+
+              <th>HILANG</th>
+
+              <th>SIAP DIPAKAI</th>
+
+              <th>NILAI</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              (d.byItem || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.category ||
+                            "-"
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${x.total}
+                        </strong>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge green">
+                          ${x.baik}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge yellow">
+                          ${x.rusakRingan}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge red">
+                          ${x.rusakBerat}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.hilang > 0
+
+                            ? `
+                              <span class="badge red">
+                                ${x.hilang}
+                              </span>
+                            `
+
+                            : `
+                              <span class="badge gray">
+                                0
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.siapDipakai > 0
+
+                            ? `
+                              <span class="badge green">
+                                ${x.siapDipakai}
+                              </span>
+                            `
+
+                            : `
+                              <span class="badge gray">
+                                0
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${money(
+                            x.nilai
+                          )}
+                        </strong>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+
+                <tr>
+
+                  <td colspan="8">
+
+                    <div class="empty">
+
+                      Belum ada ALKER
+                      di Gudang.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         DETAIL UNIT
+    =================================== -->
+
+    <div class="card">
+
+      <h3>
+        Detail Unit Gudang
+      </h3>
+
+
+      ${warehouseTableDetail_(
+        d.items || []
+      )}
+
+    </div>
 
   `;
+
 }
 
 
-function warehouseTable(items) {
+function warehouseTableDetail_(
+  items
+){
 
   return `
 
@@ -6538,12 +7474,18 @@ function warehouseTable(items) {
           <tr>
 
             <th>ID</th>
-            <th>Alker</th>
-            <th>Merk/Type</th>
+
+            <th>ALKER</th>
+
+            <th>MERK / TYPE</th>
+
             <th>SN</th>
-            <th>Kondisi</th>
-            <th>Status</th>
-            <th>Nilai</th>
+
+            <th>KONDISI</th>
+
+            <th>STATUS</th>
+
+            <th>NILAI</th>
 
           </tr>
 
@@ -6560,33 +7502,66 @@ function warehouseTable(items) {
                   <tr>
 
                     <td>
-                      ${esc(x.inventoryId)}
+                      ${esc(
+                        x.inventoryId
+                      )}
                     </td>
 
-                    <td>
-                      ${esc(x.itemName)}
-                    </td>
 
                     <td>
-                      ${esc(x.brand || "-")}
+
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+
+                    </td>
+
+
+                    <td>
+
+                      ${esc(
+                        x.brand ||
+                        "-"
+                      )}
+
                       /
-                      ${esc(x.type || "-")}
+
+                      ${esc(
+                        x.type ||
+                        "-"
+                      )}
+
                     </td>
 
-                    <td>
-                      ${esc(x.serialNumber || "-")}
-                    </td>
 
                     <td>
-                      ${badge(x.condition)}
+                      ${esc(
+                        x.serialNumber ||
+                        "-"
+                      )}
                     </td>
 
-                    <td>
-                      ${badge(x.status)}
-                    </td>
 
                     <td>
-                      ${money(x.price)}
+                      ${badge(
+                        x.condition
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.status
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${money(
+                        x.price
+                      )}
                     </td>
 
                   </tr>
@@ -6595,17 +7570,21 @@ function warehouseTable(items) {
               )
               .join("") ||
 
-            `<tr>
+            `
 
-              <td colspan="7">
+              <tr>
 
-                <div class="empty">
-                  Stok kosong.
-                </div>
+                <td colspan="7">
 
-              </td>
+                  <div class="empty">
+                    Stok kosong.
+                  </div>
 
-            </tr>`
+                </td>
+
+              </tr>
+
+            `
           }
 
         </tbody>
@@ -6615,8 +7594,8 @@ function warehouseTable(items) {
     </div>
 
   `;
-}
 
+}
 
 /*************************************************
  * VERIFIKASI INVENTORY AWAL
