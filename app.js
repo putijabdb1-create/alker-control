@@ -461,7 +461,11 @@ function buildNav() {
           "♙",
           "Teknisi Loker"
         ],
-
+		[
+		  "users",
+		  "♙",
+		  "Master Teknisi"
+		],
         [
           "teammanage",
           "⚙",
@@ -6383,51 +6387,163 @@ async function openTeamEditor(existing = null) {
 
           <label>
 
-            Loker
+  Loker / Divisi Teknisi
 
-            <select
-              name="loker"
-              id="teamLoker"
-              required
-            >
 
-              ${
-                session.role === "LEADER"
+  ${
+    isLeader
 
-                  ? OPERATIONAL_LOKERS
-                      .map(
-                        x => `
+      ? `
 
-                          <option
-                            value="${esc(x)}"
-                            ${
-                              x === selectedLoker
-                                ? "selected"
-                                : ""
-                            }
-                          >
-                            ${esc(x)}
-                          </option>
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
 
-                        `
-                      )
-                      .join("")
+          <option value="">
+            Pilih Loker Teknisi
+          </option>
 
-                  : `
 
-                      <option
-                        value="${esc(session.loker)}"
-                        selected
-                      >
-                        ${esc(session.loker)}
-                      </option>
+          <option
+            value="IOAN / ASSURANCE"
+            ${
+              user.loker ===
+              "IOAN / ASSURANCE"
+                ? "selected"
+                : ""
+            }
+          >
+            IOAN / ASSURANCE
+          </option>
 
-                    `
-              }
 
-            </select>
+          <option
+            value="PSB / FULFILLMENT"
+            ${
+              user.loker ===
+              "PSB / FULFILLMENT"
+                ? "selected"
+                : ""
+            }
+          >
+            PSB / FULFILLMENT
+          </option>
 
-          </label>
+
+          <option
+            value="MAINTENANCE / OSP"
+            ${
+              user.loker ===
+              "MAINTENANCE / OSP"
+                ? "selected"
+                : ""
+            }
+          >
+            MAINTENANCE / OSP
+          </option>
+
+        </select>
+
+      `
+
+      : `
+
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
+
+          <option value="">
+            Pilih Loker
+          </option>
+
+
+          <option
+            value="IOAN / ASSURANCE"
+            ${
+              user.loker ===
+              "IOAN / ASSURANCE"
+                ? "selected"
+                : ""
+            }
+          >
+            IOAN / ASSURANCE
+          </option>
+
+
+          <option
+            value="PSB / FULFILLMENT"
+            ${
+              user.loker ===
+              "PSB / FULFILLMENT"
+                ? "selected"
+                : ""
+            }
+          >
+            PSB / FULFILLMENT
+          </option>
+
+
+          <option
+            value="MAINTENANCE / OSP"
+            ${
+              user.loker ===
+              "MAINTENANCE / OSP"
+                ? "selected"
+                : ""
+            }
+          >
+            MAINTENANCE / OSP
+          </option>
+
+
+          <option
+            value="LEADER"
+            ${
+              user.loker ===
+              "LEADER"
+                ? "selected"
+                : ""
+            }
+          >
+            LEADER
+          </option>
+
+
+          <option
+            value="GUDANG"
+            ${
+              user.loker ===
+              "GUDANG"
+                ? "selected"
+                : ""
+            }
+          >
+            GUDANG
+          </option>
+
+
+          <option
+            value="ADMIN"
+            ${
+              user.loker ===
+              "ADMIN"
+                ? "selected"
+                : ""
+            }
+          >
+            ADMIN
+          </option>
+
+        </select>
+
+      `
+  }
+
+</label>
 
 
           <label>
@@ -9640,8 +9756,7 @@ window.showMasterForm =
   };
 
 /*************************************************
- * MASTER USER
- * CHECKPOINT 3.3A
+ * MASTER TEKNISI / MASTER USER
  *************************************************/
 
 async function renderUsers(){
@@ -9652,6 +9767,10 @@ async function renderUsers(){
   const users =
     r.data || [];
 
+  const isLeader =
+    session.role === "LEADER";
+
+
   $("page").innerHTML = `
 
     <div class="page-head">
@@ -9660,27 +9779,39 @@ async function renderUsers(){
 
         <h2>
           ${
-            session.role === "LEADER"
-              ? "Teknisi Loker"
+            isLeader
+              ? "Master Teknisi"
               : "Master User"
           }
         </h2>
 
         <p class="muted">
+
           ${
-            session.role === "LEADER"
-              ? "Kelola user teknisi pada loker Anda."
-              : "Kelola akun, role, dan loker pengguna sistem."
+            isLeader
+
+              ? "Kelola akun Teknisi PSB, IOAN dan Maintenance."
+
+              : "Kelola seluruh akun pengguna sistem."
+
           }
+
         </p>
 
       </div>
+
 
       <button
         class="btn primary"
         onclick="showUserForm()"
       >
-        + Tambah User
+
+        ${
+          isLeader
+            ? "+ Tambah Teknisi"
+            : "+ Tambah User"
+        }
+
       </button>
 
     </div>
@@ -9689,25 +9820,39 @@ async function renderUsers(){
     <div class="grid cards">
 
       ${metric(
-        "Total User",
-        users.length,
-        "akun"
-      )}
-
-      ${metric(
-        "Teknisi",
+        "Total Teknisi",
         users.filter(
-          x => x.role === "TEKNISI"
+          x =>
+            x.role ===
+            "TEKNISI"
         ).length,
         "orang"
       )}
 
+
       ${metric(
-        "Aktif",
+        "Teknisi Aktif",
         users.filter(
-          x => x.active === "Y"
+          x =>
+            x.role === "TEKNISI" &&
+            String(
+              x.active
+            ).toUpperCase() === "Y"
         ).length,
-        "akun"
+        "orang"
+      )}
+
+
+      ${metric(
+        "Teknisi Nonaktif",
+        users.filter(
+          x =>
+            x.role === "TEKNISI" &&
+            String(
+              x.active
+            ).toUpperCase() === "N"
+        ).length,
+        "orang"
       )}
 
     </div>
@@ -9725,76 +9870,162 @@ async function renderUsers(){
           <thead>
 
             <tr>
+
               <th>Nama</th>
+
               <th>Username</th>
+
               <th>Role</th>
+
               <th>Loker</th>
+
               <th>Status</th>
+
               <th>Aksi</th>
+
             </tr>
 
           </thead>
 
+
           <tbody>
 
             ${
-              users.map(
-                x => `
+              users
+                .map(
+                  x => `
 
-                  <tr>
+                    <tr>
 
-                    <td>
-                      <strong>
-                        ${esc(x.name)}
-                      </strong>
-                    </td>
+                      <td>
 
-                    <td>
-                      ${esc(x.username)}
-                    </td>
+                        <strong>
+                          ${esc(
+                            x.name
+                          )}
+                        </strong>
 
-                    <td>
-                      ${badge(x.role)}
-                    </td>
+                      </td>
 
-                    <td>
-                      ${esc(x.loker || "-")}
-                    </td>
 
-                    <td>
-                      ${
-                        x.active === "Y"
-                          ? badge("AKTIF")
-                          : badge("NONAKTIF")
-                      }
-                    </td>
+                      <td>
+                        ${esc(
+                          x.username
+                        )}
+                      </td>
 
-                    <td>
 
-                      <button
-                        class="btn secondary"
-                        onclick='showUserForm(
-                          ${JSON.stringify(x)}
-                        )'
-                      >
-                        Edit
-                      </button>
+                      <td>
+                        ${badge(
+                          x.role
+                        )}
+                      </td>
 
-                    </td>
 
-                  </tr>
+                      <td>
+                        ${esc(
+                          x.loker ||
+                          "-"
+                        )}
+                      </td>
 
-                `
-              ).join("") ||
+
+                      <td>
+
+                        ${
+                          String(
+                            x.active
+                          ).toUpperCase()
+                          === "Y"
+
+                            ? badge(
+                                "AKTIF"
+                              )
+
+                            : badge(
+                                "NONAKTIF"
+                              )
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        <div
+                          class="actions"
+                        >
+
+                          <button
+                            class="btn secondary"
+                            onclick='showUserForm(
+                              ${JSON.stringify(x)}
+                            )'
+                          >
+                            Edit
+                          </button>
+
+
+                          ${
+                            x.role ===
+                              "TEKNISI" &&
+                            String(
+                              x.active
+                            ).toUpperCase()
+                              === "Y"
+
+                              ? `
+
+                                <button
+                                  class="btn danger"
+                                  onclick='disableUser(
+                                    "${esc(
+                                      x.userId
+                                    )}",
+                                    "${esc(
+                                      x.name
+                                    )}"
+                                  )'
+                                >
+                                  Nonaktifkan
+                                </button>
+
+                              `
+
+                              : ""
+
+                          }
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
 
               `
+
                 <tr>
+
                   <td colspan="6">
+
                     <div class="empty">
-                      Belum ada user.
+
+                      ${
+                        isLeader
+                          ? "Belum ada Teknisi."
+                          : "Belum ada User."
+                      }
+
                     </div>
+
                   </td>
+
                 </tr>
+
               `
             }
 
@@ -9807,6 +10038,7 @@ async function renderUsers(){
     </div>
 
   `;
+
 }
 window.showUserForm = function(user = {}){
 
@@ -9936,21 +10168,16 @@ window.showUserForm = function(user = {}){
           </label>
 
 
-          <label>
-            Loker
+<label>
 
-            ${
-              isLeader
+  Loker / Divisi Teknisi
 
-                ? `
-                  <label>
-
-  Loker / Divisi
 
   ${
     isLeader
 
       ? `
+
         <select
           name="loker"
           id="userLoker"
@@ -9961,22 +10188,51 @@ window.showUserForm = function(user = {}){
             Pilih Loker / Divisi
           </option>
 
-          <option value="IOAN / ASSURANCE">
+
+          <option
+            value="IOAN / ASSURANCE"
+            ${
+              user.loker ===
+              "IOAN / ASSURANCE"
+                ? "selected"
+                : ""
+            }
+          >
             IOAN / ASSURANCE
           </option>
 
-          <option value="PSB / FULFILLMENT">
+
+          <option
+            value="PSB / FULFILLMENT"
+            ${
+              user.loker ===
+              "PSB / FULFILLMENT"
+                ? "selected"
+                : ""
+            }
+          >
             PSB / FULFILLMENT
           </option>
 
-          <option value="MAINTENANCE / OSP">
+
+          <option
+            value="MAINTENANCE / OSP"
+            ${
+              user.loker ===
+              "MAINTENANCE / OSP"
+                ? "selected"
+                : ""
+            }
+          >
             MAINTENANCE / OSP
           </option>
 
         </select>
+
       `
 
       : `
+
         <select
           name="loker"
           id="userLoker"
@@ -10012,6 +10268,7 @@ window.showUserForm = function(user = {}){
           </option>
 
         </select>
+
       `
   }
 
@@ -10127,7 +10384,74 @@ window.showUserForm = function(user = {}){
     `
   );
 
+/*************************************************
+ * NONAKTIFKAN TEKNISI
+ *************************************************/
 
+window.disableUser =
+  async function(
+    userId,
+    userName
+  ){
+
+    if(!userId){
+
+      toast(
+        "ID teknisi tidak ditemukan."
+      );
+
+      return;
+
+    }
+
+
+    const yakin =
+      confirm(
+        "Nonaktifkan teknisi:\n\n" +
+        userName +
+        "\n\n" +
+        "Teknisi tidak akan bisa login lagi.\n" +
+        "Data inventory, laporan dan histori tetap disimpan."
+      );
+
+
+    if(!yakin){
+
+      return;
+
+    }
+
+
+    try{
+
+      await api(
+        "deleteUser",
+        {
+          userId:
+            userId
+        }
+      );
+
+
+      toast(
+        "Teknisi berhasil dinonaktifkan."
+      );
+
+
+      await renderUsers();
+
+    }
+    catch(err){
+
+      toast(
+        err.message ||
+        "Gagal menonaktifkan teknisi."
+      );
+
+    }
+
+  };
+  
   $("userForm").onsubmit =
     async e => {
 
@@ -10190,6 +10514,75 @@ window.showUserForm = function(user = {}){
     };
 
 };
+
+/*************************************************
+ * NONAKTIFKAN TEKNISI
+ *************************************************/
+
+window.deleteUser =
+  async function(
+    userId,
+    userName
+  ){
+
+    if(!userId){
+
+      toast(
+        "ID teknisi tidak ditemukan."
+      );
+
+      return;
+
+    }
+
+
+    const yakin =
+      confirm(
+        "Nonaktifkan teknisi " +
+        userName +
+        "?\n\n" +
+        "Teknisi tidak akan bisa login lagi.\n" +
+        "Data inventory dan riwayat tetap disimpan."
+      );
+
+
+    if(!yakin){
+
+      return;
+
+    }
+
+
+    try{
+
+      await api(
+        "deleteUser",
+        {
+          userId:
+            userId
+        }
+      );
+
+
+      toast(
+        "Teknisi berhasil dinonaktifkan."
+      );
+
+
+      await renderUsers();
+
+
+    }catch(err){
+
+      toast(
+        err.message ||
+        "Gagal menonaktifkan teknisi."
+      );
+
+    }
+
+  };
+  
 /*************************************************
  * AUDIT
  *************************************************/
