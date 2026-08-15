@@ -66,10 +66,29 @@ async function api(action, data = {}) {
     throw new Error("API_URL belum diisi di app.js");
   }
 
-  const body = new URLSearchParams({
-    action,
-    ...data
+  /*
+   * URLSearchParams hanya menerima nilai string.
+   * Object/Array harus di-JSON.stringify agar backend
+   * tidak menerima "[object Object]".
+   */
+  const params = { action };
+
+  Object.entries(data || {}).forEach(([key, value]) => {
+
+    if (value === undefined || value === null) {
+      params[key] = "";
+      return;
+    }
+
+    if (typeof value === "object") {
+      params[key] = JSON.stringify(value);
+      return;
+    }
+
+    params[key] = String(value);
   });
+
+  const body = new URLSearchParams(params);
 
   if (session?.token) {
     body.set("token", session.token);
@@ -2995,7 +3014,7 @@ window.showInitialForm =
 
           <p class="muted">
             Lengkapi data fisik ALKER,
-            serial number, kondisi dan foto.
+            Sesuaikan SN Splice : Sumitomo,Jointwit,Fujikura,INO,ADV,TUMTEC.
           </p>
 
         `;
@@ -12379,8 +12398,6 @@ window.showMasterPriceForm =
     String(
       status || ""
     ).toUpperCase();
-
-
   if(
     s ===
     "MENUNGGU VERIFIKASI"
@@ -12393,8 +12410,6 @@ window.showMasterPriceForm =
     `;
 
   }
-
-
   if(
     s ===
     "DITERIMA GUDANG"
@@ -12407,13 +12422,10 @@ window.showMasterPriceForm =
     `;
 
   }
-
-
   if(
     s ===
     "REVISI"
   ){
-
     return `
       <span class="badge red">
         REVISI
@@ -12421,8 +12433,6 @@ window.showMasterPriceForm =
     `;
 
   }
-
-
   return badge(
     status || "-"
   );
