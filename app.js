@@ -216,55 +216,244 @@ window.closeModal = closeModal;
  * LOGIN
  *************************************************/
 
-$("loginForm")?.addEventListener(
-  "submit",
-  async e => {
+function initLogin(){
 
-    e.preventDefault();
+  const form = $("loginForm");
 
-    $("loginMsg").textContent =
-      "Memproses login...";
+  if(!form){
 
-    try {
+    console.warn(
+      "loginForm belum tersedia."
+    );
 
-      const r = await api(
-        "login",
-        {
-          username:
-            $("username").value.trim(),
+    return;
 
-          password:
-            $("password").value
-        }
-      );
+  }
 
-      /*
-       * BACKEND:
-       * ok -> data -> session
-       */
-      session = r.data?.session;
 
-      if (!session) {
-        throw new Error(
-          "Session login tidak ditemukan."
+  /*
+   * Cegah listener terpasang dua kali
+   */
+  if(form.dataset.loginReady === "Y"){
+    return;
+  }
+
+  form.dataset.loginReady = "Y";
+
+
+  form.addEventListener(
+    "submit",
+    async e => {
+
+      e.preventDefault();
+      e.stopPropagation();
+
+
+      const usernameEl =
+        $("username");
+
+      const passwordEl =
+        $("password");
+
+      const msgEl =
+        $("loginMsg");
+
+
+      const username =
+        String(
+          usernameEl?.value || ""
+        ).trim();
+
+      const password =
+        String(
+          passwordEl?.value || ""
         );
+
+
+      if(!username){
+
+        if(msgEl){
+          msgEl.textContent =
+            "Username wajib diisi.";
+        }
+
+        usernameEl?.focus();
+
+        return;
+
       }
 
-      localStorage.setItem(
-        "alker_session",
-        JSON.stringify(session)
-      );
 
-      await initApp();
+      if(!password){
 
-    } catch (err) {
+        if(msgEl){
+          msgEl.textContent =
+            "Password wajib diisi.";
+        }
 
-      $("loginMsg").textContent =
-        err.message;
+        passwordEl?.focus();
+
+        return;
+
+      }
+
+
+      if(msgEl){
+        msgEl.textContent =
+          "Memproses login...";
+      }
+
+
+      /*
+       * Disable tombol sementara
+       */
+      const btn =
+        form.querySelector(
+          'button[type="submit"]'
+        );
+
+      const oldText =
+        btn?.textContent ||
+        "Masuk ke Sistem";
+
+
+      if(btn){
+        btn.disabled = true;
+        btn.textContent =
+          "Memproses...";
+      }
+
+
+      try{
+
+        /*
+         * Pastikan session lama
+         * tidak ikut mengganggu login baru.
+         */
+        session = null;
+
+
+        const r =
+          await api(
+            "login",
+            {
+              username,
+              password
+            }
+          );
+
+
+        /*
+         * Backend:
+         * {
+         *   ok:true,
+         *   data:{
+         *     session:{...}
+         *   }
+         * }
+         */
+        const newSession =
+          r?.data?.session;
+
+
+        if(
+          !newSession ||
+          !newSession.token
+        ){
+
+          throw new Error(
+            "Login berhasil tetapi session tidak diterima."
+          );
+
+        }
+
+
+        session =
+          newSession;
+
+
+        localStorage.setItem(
+          "alker_session",
+          JSON.stringify(
+            session
+          )
+        );
+
+
+        /*
+         * Masuk ke aplikasi.
+         */
+        await initApp();
+
+
+      }
+      catch(err){
+
+        console.error(
+          "LOGIN ERROR:",
+          err
+        );
+
+
+        /*
+         * Jangan hapus session lama
+         * sebelum login benar-benar berhasil.
+         */
+        session = null;
+
+
+        localStorage.removeItem(
+          "alker_session"
+        );
+
+
+        if(msgEl){
+
+          msgEl.textContent =
+            err?.message ||
+            "Login gagal. Silakan coba lagi.";
+
+        }
+
+      }
+      finally{
+
+        if(btn){
+
+          btn.disabled = false;
+
+          btn.textContent =
+            oldText;
+
+        }
+
+      }
+
     }
-  }
-);
+  );
 
+}
+
+
+/*
+ * Jalankan setelah HTML selesai.
+ */
+if(
+  document.readyState ===
+  "loading"
+){
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    initLogin
+  );
+
+}
+else{
+
+  initLogin();
+
+}
 
 /*************************************************
  * LOGOUT
@@ -10691,66 +10880,10 @@ async function renderAudit() {
  *************************************************/
 
 (async () => {
-
-  try {
-
-    const saved =
-      JSON.parse(
-        localStorage.getItem(
-          "alker_session"
-        ) || "null"
-      );
-
-
-    if (!saved) {
-
-      return;
-
-    }
-
-
-    session =
-      saved;
-
-
-    /*
-     * Cek session ke server.
-     */
-    const v =
-      await api(
-        "me"
-      );
-
-
-    if (
-      v.ok &&
-      v.data?.session
-    ) {
-
-      session =
-        v.data.session;
-      localStorage.setItem(
-        "alker_session",
-        JSON.stringify(session)
-      );
-      await initApp();
-    }
-
-  } catch (e) {
-
-    console.warn(
-      "Session lama tidak valid:",
-      e.message
-    );
-    localStorage.removeItem(
-      "alker_session"
-    );
-
-    session = null;
-
-  }
-
+   ...
 })();
+
+
 function initialStatusBadge(status){
 
   const s =
@@ -10815,6 +10948,7 @@ function initialStatusBadge(status){
   `;
 
 }
+
 function renderInventorySimpleTable(
   data
 ){
