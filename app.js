@@ -6980,6 +6980,13 @@ async function renderTeamInventory() {
 
       </div>
 
+      <button
+        class="btn primary"
+        onclick="showLeaderAddInventory()"
+      >
+        + Input ALKER
+      </button>
+
     </div>
 
 
@@ -6995,6 +7002,180 @@ async function renderTeamInventory() {
     "loker"
   );
 }
+
+
+window.showLeaderAddInventory = async () => {
+
+  try {
+    const [mr, tr] = await Promise.all([
+      api("masters"),
+      api("technicians", { scope: "loker" })
+    ]);
+
+    const items = mr.data?.items || [];
+    const technicians = tr.data || [];
+
+    if (!technicians.length) {
+      toast("Belum ada teknisi aktif di loker ini.");
+      return;
+    }
+
+    openModal(
+      "Input ALKER ke Teknisi",
+      `
+        <p class="muted">
+          ALKER langsung dicatat ke teknisi pada loker
+          <strong>${esc(session.loker || "-")}</strong>.
+          Harga otomatis mengikuti Master Harga.
+        </p>
+
+        <form id="leaderAddInventoryForm">
+          <div class="form-grid">
+
+            <label>
+              Teknisi
+              <select name="technicianId" required>
+                <option value="">-- Pilih Teknisi --</option>
+                ${technicians.map(x => `
+                  <option value="${esc(x.id || x.technicianId || "")}">
+                    ${esc(x.name || "-")}
+                  </option>
+                `).join("")}
+              </select>
+            </label>
+
+            <label>
+              ALKER
+              <select name="itemId" id="leaderItemId" required>
+                <option value="">-- Pilih ALKER --</option>
+                ${items.map(x => `
+                  <option value="${esc(x.itemId)}" data-name="${esc(x.itemName)}">
+                    ${esc(x.itemName)}
+                  </option>
+                `).join("")}
+              </select>
+            </label>
+
+            <label>
+              Merk
+              <div id="leaderBrandWrap">
+                <input name="brand" id="leaderBrand" placeholder="Merk">
+              </div>
+            </label>
+
+            <label>
+              Type
+              <input name="type" id="leaderType" placeholder="Type / model">
+            </label>
+
+            <label>
+              Serial Number
+              <input name="serialNumber" required placeholder="Serial Number">
+            </label>
+
+            <label>
+              Kondisi
+              <select name="condition" required>
+                <option value="BAIK">BAIK</option>
+                <option value="RUSAK RINGAN">RUSAK RINGAN</option>
+                <option value="RUSAK BERAT">RUSAK BERAT</option>
+              </select>
+            </label>
+
+            <label>
+              Foto ALKER
+              <input name="photo" id="leaderPhoto" type="file" accept="image/*" capture="environment" required>
+            </label>
+
+            <label>
+              Foto Serial / Label
+              <input name="serialPhoto" id="leaderSerialPhoto" type="file" accept="image/*" capture="environment">
+            </label>
+
+            <label class="full-col">
+              Keterangan
+              <textarea name="note" placeholder="Keterangan jika diperlukan..."></textarea>
+            </label>
+
+          </div>
+
+          <div class="card" style="margin-top:15px">
+            <strong>Harga</strong>
+            <div class="muted" style="margin-top:5px">Harga tidak dapat diinput Leader dan akan otomatis diambil dari Master Harga setelah disimpan.</div>
+          </div>
+
+          <div class="actions" style="margin-top:15px">
+            <button type="button" class="btn secondary" onclick="closeModal()">Batal</button>
+            <button type="submit" class="btn primary" id="leaderAddInventorySubmit">Simpan ALKER</button>
+          </div>
+        </form>
+      `
+    );
+
+    const itemSelect = $("leaderItemId");
+    const brandWrap = $("leaderBrandWrap");
+
+    function refreshLeaderBrand() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const isSplicer = String(item?.itemName || "").trim().toLowerCase() === "splicer";
+
+      if (isSplicer) {
+        const brands = ["Sumitomo","Jointwit","Fujikura","INO","ADV","TUMTEC"];
+        brandWrap.innerHTML = `
+          <select name="brand" id="leaderBrand" required>
+            <option value="">-- Pilih Merk Splicer --</option>
+            ${brands.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}
+          </select>
+        `;
+      } else {
+        brandWrap.innerHTML = `<input name="brand" id="leaderBrand" placeholder="Merk">`;
+      }
+    }
+
+    itemSelect.onchange = refreshLeaderBrand;
+    refreshLeaderBrand();
+
+    $("leaderAddInventoryForm").onsubmit = async e => {
+      e.preventDefault();
+
+      const btn = $("leaderAddInventorySubmit");
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Menyimpan...";
+
+      try {
+        const fd = new FormData(e.target);
+        const photo = $("leaderPhoto")?.files?.[0] || null;
+        const serialPhoto = $("leaderSerialPhoto")?.files?.[0] || null;
+
+        const payload = {
+          technicianId: fd.get("technicianId"),
+          itemId: fd.get("itemId"),
+          brand: fd.get("brand") || "",
+          type: fd.get("type") || "",
+          serialNumber: fd.get("serialNumber") || "",
+          condition: fd.get("condition") || "BAIK",
+          note: fd.get("note") || "",
+          photo: photo ? await fileToBase64(photo) : "",
+          serialPhoto: serialPhoto ? await fileToBase64(serialPhoto) : ""
+        };
+
+        const r = await api("leaderAddInventory", payload);
+        toast(r.data?.message || "ALKER berhasil ditambahkan.");
+        closeModal();
+        await renderTeamInventory();
+
+      } catch (err) {
+        toast(err.message || "Gagal menambahkan ALKER.");
+        btn.disabled = false;
+        btn.textContent = "Simpan ALKER";
+      }
+    };
+
+  } catch (err) {
+    toast(err.message || "Gagal membuka form Input ALKER.");
+  }
+};
 
 
 async function renderTeamRequests() {
