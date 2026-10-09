@@ -2487,18 +2487,19 @@ window.showInventoryDetail =
             ["Loker",x.loker],
             ["Kondisi",x.condition],
             ["Status",x.status],
-            ["Nilai",money(x.price)]
+            ["Nilai",money(x.price)],
+            ["Keterangan Tambahan",x.notes || x.note || "-"]
           ]
             .map(
               a => `
 
-                <div class="detail-box">
+                <div class="detail-box" ${a[0] === "Keterangan Tambahan" ? 'style="grid-column:1/-1;white-space:pre-wrap;overflow-wrap:anywhere"' : ""}>
 
                   <span>
                     ${esc(a[0])}
                   </span>
 
-                  <strong>
+                  <strong style="white-space:pre-wrap;overflow-wrap:anywhere">
                     ${esc(
                       a[1] || "-"
                     )}
@@ -8221,8 +8222,11 @@ window.showWarehouseStockForm = async () => {
           <label>Tipe
             <input name="type" placeholder="Tipe/model ALKER">
           </label>
+          <label>Jumlah / Quantity
+            <input name="quantity" type="number" min="1" max="500" value="1" required>
+          </label>
           <label>Nomor Seri (SN)
-            <input name="serialNumber" placeholder="Masukkan nomor seri" required>
+            <input name="serialNumber" placeholder="Wajib jika quantity 1; untuk banyak unit isi di keterangan bila berbeda">
           </label>
           <label>Kondisi Fisik
             <select name="condition" required>
@@ -8244,7 +8248,7 @@ window.showWarehouseStockForm = async () => {
         </div>
         <div class="card" style="margin-top:12px;padding:12px">
           <strong>Catatan validasi</strong>
-          <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit berkondisi BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap tercatat sebagai acuan saat diterima teknisi.</p>
+          <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap dicatat. Jika quantity lebih dari 1, data dibuat per unit; nomor seri dapat dicatat pada keterangan jika setiap unit berbeda.</p>
         </div>
         <div class="actions" style="margin-top:15px">
           <button type="submit" class="btn primary" id="warehouseStockSaveBtn">Simpan Validasi Stok</button>
@@ -8263,6 +8267,7 @@ window.showWarehouseStockForm = async () => {
           brand: form.brand.value.trim(),
           type: form.type.value.trim(),
           serialNumber: form.serialNumber.value.trim(),
+          quantity: form.quantity.value,
           condition: form.condition.value,
           note: form.note.value.trim(),
           photo: await fileToBase64(form.photo.files[0]),
