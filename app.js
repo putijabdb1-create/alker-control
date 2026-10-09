@@ -1,4812 +1,2679 @@
-const CONFIG = {
-  SPREADSHEET_ID: "",          // kosong = gunakan spreadsheet yang terikat ke script
-  DRIVE_FOLDER_ID: "",         // kosong = buat folder ALKER_CONTROL_FILES
-  SESSION_HOURS: 12
-};
-
-const SHEETS = [
-  "USERS","LOKERS","MASTER_ALKER","TEKNISI","INVENTORY","INITIAL_INVENTORY",
-  "REQUESTS","RECEIVING","DISTRIBUTION","RETURNS","ISSUES","PROCUREMENT",
-  "HISTORY","AUDIT","MASTER_ALKER_LOKER","TEKNISI_TEAM","MASTER_ALKER_PRICE"
-];
-
-const HEADERS = {
-  USERS:["userId","username","passwordHash","name","role","loker","active","createdAt","leaderId"],
-  LOKERS:["lokerId","name","status","createdAt"],
-  MASTER_ALKER:["itemId","itemName","category","unit","standardPrice","lokers","spec","active","createdAt","photoMode"],
-  TEKNISI:["technicianId","name","username","loker","phone","status","createdAt"],
-  INVENTORY:["inventoryId","itemId","itemName","category","brand","type","serialNumber","price","condition","status","location","loker","holderId","holder","photoUrl","serialPhotoUrl","receivedAt","source","notes","updatedAt"],
-  INITIAL_INVENTORY:["initialId","itemId","itemName","technicianId","technician","loker","brand","type","serialNumber","condition",
-  "price","photoUrl","serialPhotoUrl","note","status","date","reviewNote","givenStatus"], 
-  REQUESTS:["requestId","itemId","itemName","technicianId","technician","loker","requestType","qty","priority","reason","photoUrl","status","leaderDecision","warehouseDecision","date","updatedAt","note"],
-  RECEIVING:["receivingId","itemId","itemName","qty","brand","type","serialNumber","price","supplier","reference","photoUrl","docPhotoUrl","note","status","date","actor"],
-  DISTRIBUTION:["distributionId","inventoryId","itemId","itemName","technicianId","technician","loker","condition","note","status","date","actor"],
-  RETURNS:["returnId","inventoryId","itemId","itemName","technicianId","technician","loker","condition","note","photoUrl","serialPhotoUrl","status","date","actor","reviewNote","reviewedAt","reviewedBy"],
-  ISSUES:["issueId","inventoryId","itemId","itemName","technicianId","technician","loker","issueType","note","photoUrl","status","date","updatedAt"],
-  PROCUREMENT:["procurementId","itemId","itemName","qty","estimate","priority","reason","status","requestId","date","updatedAt","actor"],
-  HISTORY:["historyId","actorId","actor","action","description","date"],
-  AUDIT:["auditId","actorId","actor","action","description","date"],
-  MASTER_ALKER_LOKER:["mappingId","itemId","loker","active","createdAt"],
-  TEKNISI_TEAM:["teamId","loker","technicianId","partnerId","active","createdAt","updatedAt"],
-  MASTER_ALKER_PRICE:["priceId","itemId","itemName","brand","type","price","active","createdAt","updatedAt"]
-};
-
-const SEED_LOKERS = [
-  "IOAN / ASSURANCE","PSB / FULFILLMENT","MAINTENANCE / OSP","LEADER","GUDANG"
-];
-
-const SEED_USERS = [
-  ["USR-ADMIN","admin","","Administrator","ADMIN","","Y",""],
-  ["USR-GUDANG","gudang","","SPV Gudang","SPV_GUDANG","GUDANG","Y",""],
-  ["USR-LEADER","leader","","Leader Utama","LEADER","LEADER","Y",""],
-  ["USR-TEKNISI","teknisi","","Teknisi Demo","TEKNISI","PSB / FULFILLMENT","Y",""]
-];
-
-// Master ALKER disatukan per jenis, tetapi kolom lokers mempertahankan loker pengguna.
-const SEED_ITEMS = [
-  // IOAN / ASSURANCE
-  ["ALK-IOAN-001","Splicer","ALKER","UNIT",0,"IOAN / ASSURANCE","Asuransi dan pajak; Maintenance Service; SUCA dan elektroda","Y"],
-  ["ALK-IOAN-002","Unit Splicer","ALKER","UNIT",0,"IOAN / ASSURANCE","","Y"],
-  ["ALK-IOAN-003","ARC Count","ALKER","UNIT",0,"IOAN / ASSURANCE","","Y"],
-  ["ALK-IOAN-004","Testphone","Alat Komunikasi","UNIT",0,"IOAN / ASSURANCE","Chino-E C019","Y"],
-  ["ALK-IOAN-005","Tone Checker","Alat Komunikasi","UNIT",0,"IOAN / ASSURANCE","Pantong (TGP 42)","Y"],
-  ["ALK-IOAN-006","LAN Tester","Alat Ukur","UNIT",0,"IOAN / ASSURANCE","Nankai RJ11/RJ45-SY-468","Y"],
-  ["ALK-IOAN-007","Optical Power Meter","Alat Ukur","UNIT",0,"IOAN / ASSURANCE","Joinwit, BND, Senter, F2H, AMG","Y"],
-  ["ALK-IOAN-008","VFL (Visible Fault Locator) 20km","Alat Ukur","UNIT",0,"IOAN / ASSURANCE","Joinwit, Senter","Y"],
-  ["ALK-IOAN-009","Optical Fiber Ranger","Alat Ukur","UNIT",0,"IOAN / ASSURANCE","Joinwit, Comptcyo, Novker","Y"],
-  ["ALK-IOAN-010","One Click Cleaner (Fiber Cleaner)","Kelengkapan","UNIT",0,"IOAN / ASSURANCE","Cleaner EC/SC/ST","Y"],
-  ["ALK-IOAN-011","Toolkit FO (Fiber Stripper)","Kelengkapan","UNIT",0,"IOAN / ASSURANCE","Ilsintech, Swift (DropcoreStripper)","Y"],
-  ["ALK-IOAN-012","Tangga Dorong Aluminium 5.1 Meter","Kelengkapan","UNIT",0,"IOAN / ASSURANCE","Tangga Teleskopik 5.1 m","Y"],
-  ["ALK-IOAN-013","Toolkit Set","Kelengkapan","SET",0,"IOAN / ASSURANCE","Tang potong; tang jepit; tang kombinasi; testpen","Y"],
-  ["ALK-IOAN-014","Alat komunikasi (HP Android)","Komunikasi","UNIT",0,"IOAN / ASSURANCE","Android RAM minimal 4GB","Y"],
-  ["ALK-IOAN-015","Crimping Tools RJ11 dan RJ45 Cat-5","Kelengkapan","UNIT",0,"IOAN / ASSURANCE","Trendnet (Crimping Tool RJ45/RJ11)","Y"],
-  ["ALK-IOAN-016","Paket internet & Pulsa","Operasional","PAKET",0,"IOAN / ASSURANCE","TelkomGroup, minimal 2GB","Y"],
-  ["ALK-IOAN-017","Body Harness","APD","UNIT",0,"IOAN / ASSURANCE","Krisbow atau setara","Y"],
-  ["ALK-IOAN-018","Helm pengaman","APD","UNIT",0,"IOAN / ASSURANCE","Krisbow atau setara","Y"],
-  ["ALK-IOAN-019","Kaos tangan","APD","PASANG",0,"IOAN / ASSURANCE","Krisbow atau setara","Y"],
-  ["ALK-IOAN-020","Jas Hujan","APD","UNIT",0,"IOAN / ASSURANCE","AXIO AX-882 Europe, AXIO AX-661","Y"],
-  ["ALK-IOAN-021","Tas Punggung","Kelengkapan","UNIT",0,"IOAN / ASSURANCE","Kuat & cukup untuk membawa alat kerja","Y"],
-  ["ALK-IOAN-022","Powerbank Valins","Elektronik","UNIT",0,"IOAN / ASSURANCE","Robot atau Xiaomi","Y"],
-  ["ALK-IOAN-023","Converter Type-C to RJ45","Elektronik","UNIT",0,"IOAN / ASSURANCE","Non-brand","Y"],
-  ["ALK-IOAN-024","KBM R2","Kendaraan","UNIT",0,"IOAN / ASSURANCE","Motor operasional","Y"],
-  ["ALK-IOAN-025","BBM","Operasional","LITER",0,"IOAN / ASSURANCE","Pertalite","Y"],
-  // PSB / FULFILLMENT
-  ["ALK-PSB-001","Splicer","ALKER","UNIT",0,"PSB / FULFILLMENT","Asuransi dan pajak; Maintenance Service; SUCA dan elektroda","Y"],
-  ["ALK-PSB-002","ARC Count","ALKER","UNIT",0,"PSB / FULFILLMENT","","Y"],
-  ["ALK-PSB-003","Testphone","Alat Komunikasi","UNIT",0,"PSB / FULFILLMENT","Chino-E C019","Y"],
-  ["ALK-PSB-004","Optical Power Meter","Alat Ukur","UNIT",0,"PSB / FULFILLMENT","Joinwit, BND, Senter, F2H, AMG","Y"],
-  ["ALK-PSB-005","One Click Cleaner (Fiber Cleaner)","Kelengkapan","UNIT",0,"PSB / FULFILLMENT","Cleaner MU/LC","Y"],
-  ["ALK-PSB-006","Toolkit FO (Fiber Stripper)","Kelengkapan","UNIT",0,"PSB / FULFILLMENT","Swift (DropcoreStripper)","Y"],
-  ["ALK-PSB-007","Tangga Dorong Aluminium 5.1 Meter","Kelengkapan","UNIT",0,"PSB / FULFILLMENT","Tangga Teleskopik 5.1 m","Y"],
-  ["ALK-PSB-008","Toolkit Set","Kelengkapan","SET",0,"PSB / FULFILLMENT","Toolkit Set 8 pcs","Y"],
-  ["ALK-PSB-009","Alat komunikasi (HP Android)","Komunikasi","UNIT",0,"PSB / FULFILLMENT","Android RAM minimal 4GB, Dual Band","Y"],
-  ["ALK-PSB-010","Paket internet & Pulsa","Operasional","PAKET",0,"PSB / FULFILLMENT","TelkomGroup, minimal 2GB","Y"],
-  ["ALK-PSB-011","Body Harness","APD","UNIT",0,"PSB / FULFILLMENT","Krisbow atau setara","Y"],
-  ["ALK-PSB-012","Helm pengaman","APD","UNIT",0,"PSB / FULFILLMENT","Krisbow atau setara","Y"],
-  ["ALK-PSB-013","Kaos tangan","APD","PASANG",0,"PSB / FULFILLMENT","Krisbow atau setara","Y"],
-  ["ALK-PSB-014","Jas Hujan","APD","UNIT",0,"PSB / FULFILLMENT","AXIO AX-882 Europe, AXIO AX-661","Y"],
-  ["ALK-PSB-015","Tas Punggung","Kelengkapan","UNIT",0,"PSB / FULFILLMENT","Kuat & cukup untuk membawa Alat Kerja","Y"],
-  ["ALK-PSB-016","Pakaian Seragam","APD","SET",0,"PSB / FULFILLMENT","Design yang ditetapkan Telkom Akses","Y"],
-  ["ALK-PSB-017","Powerbank Valins","Elektronik","UNIT",0,"PSB / FULFILLMENT","Robot atau Xiaomi (1000 mAH)","Y"],
-  ["ALK-PSB-018","Converter Type-C to RJ45","Elektronik","UNIT",0,"PSB / FULFILLMENT","Non-brand","Y"],
-  ["ALK-PSB-019","Bor","Alat Kerja","UNIT",0,"PSB / FULFILLMENT","Bosch, Black+Decker, Makita","Y"],
-  ["ALK-PSB-020","Mata bor berbagai ukuran","Alat Kerja","SET",0,"PSB / FULFILLMENT","Non-brand","Y"],
-  ["ALK-PSB-021","Safety Shoes","APD","PASANG",0,"PSB / FULFILLMENT","Krisbow (MAXI 4 in)","Y"],
-  ["ALK-PSB-022","KBM R2","Kendaraan","UNIT",0,"PSB / FULFILLMENT","Motor Matic/110cc maksimal 8 tahun atau motor listrik baterai 72v","Y"],
-  ["ALK-PSB-023","BBM","Operasional","LITER",0,"PSB / FULFILLMENT","Pertalite","Y"],
-  // MAINTENANCE / OSP
-  ["ALK-OSP-001","Splicer","ALKER","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-002","Testphone","Alat Komunikasi","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-003","Tone Checker","Alat Komunikasi","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-004","Mini OTDR","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-005","Optical Fiber Ranger","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-006","Baterai Capacity Tester","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-007","Megger Earth Tester","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-008","Tang Ampere","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-009","Termo Hygrometer","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-010","One Click Cleaner Tipe FC/SC/ST","Kelengkapan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-011","Toolkit FO (Fiber Stripper)","Kelengkapan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-012","Tangga Dorong Aluminium 5.1 Meter","Kelengkapan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-013","Toolkit Set","Kelengkapan","SET",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-014","Alat komunikasi (HP Android 4G)","Komunikasi","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-015","PC Help Desk (HD/Admin)","Perangkat IT","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-016","Laptop / Net Book (TL)","Perangkat IT","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-017","Alat Bersih-bersih","Operasional","UNIT",0,"MAINTENANCE / OSP","Vacuum Cleaner, Kain Majun","Y"],
-  ["ALK-OSP-018","Terpal Plastik","Operasional","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-019","Genset 1000 Watt + Lampu Penerangan","Peralatan Tim","SET",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-020","Alat Gali","Peralatan Tim","SET",0,"MAINTENANCE / OSP","Linggis, Cangkul, Sabit, Pengki Plastik","Y"],
-  ["ALK-OSP-021","Paket Internet & Pulsa","Operasional","PAKET",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-022","Seragam","APD","SET",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-023","ID Card","Identitas","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-024","Working / Body Harness","APD","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-025","Helm Pengaman","APD","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-026","Kaos Tangan","APD","PASANG",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-027","Jas Hujan","APD","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-028","Safety Shoes","APD","PASANG",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-029","Tas Punggung","Kelengkapan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-030","Rompi Teknisi","APD","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-031","Head Lamp","Kelengkapan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-032","Bor Listrik","Alat Kerja","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-033","Track Tang","Alat Kerja","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-034","Alat Buka Tutup Man Hole","Alat Kerja","SET",0,"MAINTENANCE / OSP","Takel, Tripod","Y"],
-  ["ALK-OSP-035","Pompa Air","Peralatan Tim","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-036","Cable Fault Locator","Alat Ukur","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-037","KBM Roda 2","Kendaraan","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-038","Tang Potong atau Tang Baja","Alat Kerja","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-039","Chainsaw Machine Portable","Peralatan Tim","UNIT",0,"MAINTENANCE / OSP","","Y"],
-  ["ALK-OSP-040","Aksesoris Material Bantu","Consumable","PAKET",0,"MAINTENANCE / OSP","0,5 liter; tisu 1 pack kecil; lakban 1 roll; tali montage 67 m; isolasi ban 0,25 roll; parapon 0,25 kg","Y"],
-  // LEADER
-  ["ALK-LDR-001","Laptop","Perangkat IT","UNIT",0,"LEADER","","Y"],
-  ["ALK-LDR-002","HP","Komunikasi","UNIT",0,"LEADER","","Y"],
-  ["ALK-LDR-003","Motor","Kendaraan","UNIT",0,"LEADER","","Y"]
-];
-
-function ss_(){
-  if(CONFIG.SPREADSHEET_ID) return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  return SpreadsheetApp.getActiveSpreadsheet();
-}
-function now_(){return Utilities.formatDate(new Date(),Session.getScriptTimeZone()||"Asia/Jakarta","yyyy-MM-dd HH:mm:ss")}
-function id_(p){return p+"-"+Utilities.getUuid().slice(0,8).toUpperCase()}
-function json_(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON)}
-function ok_(data){return json_({ok:true,data})}
-function fail_(m){return json_({ok:false,message:m})}
-function sheet_(n){return ss_().getSheetByName(n)}
-function rows_(n){
-  const sh=sheet_(n); if(!sh||sh.getLastRow()<2)return [];
-  const h=HEADERS[n]||sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
-  return sh.getRange(2,1,sh.getLastRow()-1,h.length).getValues().map(r=>Object.fromEntries(h.map((x,i)=>[x,r[i]])));
-}
-function append_(n,obj){
-  const sh=sheet_(n), h=HEADERS[n];
-  sh.appendRow(h.map(k=>obj[k]??""));
-}
-function updateById_(n,key,val,obj){
-  const sh=sheet_(n),h=HEADERS[n], vals=sh.getDataRange().getValues();
-  const idx=h.indexOf(key); if(idx<0)return false;
-  for(let i=1;i<vals.length;i++) if(String(vals[i][idx])===String(val)){
-    h.forEach((k,j)=>{if(Object.prototype.hasOwnProperty.call(obj,k))sh.getRange(i+1,j+1).setValue(obj[k])});
-    return true;
-  } return false;
-}
 /*************************************************
- * RETURNS - ENSURE COLUMNS
+ * ALKER CONTROL
+ * CHECKPOINT 3.2C
+ * FRONTEND
  *************************************************/
 
-function ensureReturnsSheet_(){
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbwjCqfw5duO4yJh5lO4sA0UmZiIcEj437TgFNBuGJ71o-yj0lZnaWstO8NTlNXWmU2DsA/exec";
 
-  const sh =
-    sheet_("RETURNS");
+let session = null;
+let cache = {};
 
-  if(!sh){
-    throw new Error(
-      "Sheet RETURNS tidak ditemukan."
-    );
+/*************************************************
+ * BASIC HELPERS
+ *************************************************/
+
+const $ = id => document.getElementById(id);
+
+const esc = s =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    m => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[m])
+  );
+
+const money = n =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(Number(n) || 0);
+
+const badge = (s = "") => {
+  const x = String(s).toUpperCase();
+
+  let c = "gray";
+
+  if (/BAIK|APPROVED|SELESAI|READY|AKTIF/.test(x)) {
+    c = "green";
+  } else if (/MENUNGGU|REVISI|PENDING/.test(x)) {
+    c = "yellow";
+  } else if (/HILANG|DITOLAK/.test(x)) {
+    c = "red";
+  } else if (/SERVICE|PROSES|DISTRIBUSI/.test(x)) {
+    c = "blue";
+  } else if (/RUSAK/.test(x)) {
+    c = "red";
   }
 
-  const headers =
-    HEADERS.RETURNS;
+  return `<span class="badge ${c}">${esc(s)}</span>`;
+};
 
-  const current =
-    sh
-      .getRange(
-        1,
-        1,
-        1,
-        Math.max(
-          sh.getLastColumn(),
-          headers.length
-        )
-      )
-      .getValues()[0];
 
-  let changed = false;
+/*************************************************
+ * API
+ *************************************************/
 
-  headers.forEach(
-    (header,index) => {
+async function api(action, data = {}) {
 
-      if(
-        String(
-          current[index] || ""
-        ).trim() !==
-        header
-      ){
+  if (API_URL.includes("PASTE_")) {
+    throw new Error("API_URL belum diisi di app.js");
+  }
 
-        sh
-          .getRange(
-            1,
-            index + 1
-          )
-          .setValue(
-            header
-          );
+  /*
+   * URLSearchParams hanya menerima nilai string.
+   * Object/Array harus di-JSON.stringify agar backend
+   * tidak menerima "[object Object]".
+   */
+  const params = { action };
 
-        changed = true;
+  Object.entries(data || {}).forEach(([key, value]) => {
 
-      }
-
+    if (value === undefined || value === null) {
+      params[key] = "";
+      return;
     }
-  );
 
-  if(changed){
-    sh.setFrozenRows(1);
-    SpreadsheetApp.flush();
+    if (typeof value === "object") {
+      params[key] = JSON.stringify(value);
+      return;
+    }
+
+    params[key] = String(value);
+  });
+
+  const body = new URLSearchParams(params);
+
+  if (session?.token) {
+    body.set("token", session.token);
   }
 
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body
+  });
+
+  if (!res.ok) {
+    throw new Error("Server API tidak dapat dihubungi.");
+  }
+
+  const json = await res.json();
+
+  /*
+   * CHECKPOINT 3.2C
+   * technicianTeam_ pada beberapa versi Code.gs
+   * mengembalikan object data langsung, bukan wrapper ok_.
+   * Normalisasi di frontend agar kedua format tetap kompatibel:
+   *
+   * 1. { ok:true, data:{...} }
+   * 2. { teams:[...], technicians:[...] }
+   * 3. { team:{...}, technicians:[...] }
+   */
+  if (action === "technicianTeam") {
+
+    if (json && json.ok === true) {
+      return json;
+    }
+
+    if (json && (
+      Array.isArray(json.teams) ||
+      Array.isArray(json.technicians) ||
+      Object.prototype.hasOwnProperty.call(json, "team")
+    )) {
+      return {
+        ok: true,
+        data: json
+      };
+    }
+  }
+
+  if (!json.ok) {
+    throw new Error(
+      json.message || "Terjadi kesalahan."
+    );
+  }
+
+  return json;
 }
-function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(s),Utilities.Charset.UTF_8).map(b=>(b<0?b+256:b).toString(16).padStart(2,"0")).join("")}
-function folder_(){
-  if(CONFIG.DRIVE_FOLDER_ID)return DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
-  const it=DriveApp.getFoldersByName("ALKER_CONTROL_FILES"); return it.hasNext()?it.next():DriveApp.createFolder("ALKER_CONTROL_FILES");
-}
+
+
 /*************************************************
- * GOOGLE DRIVE — ALKER
- *
- * Struktur:
- *
- * ALKER_CONTROL_FILES
- *   └── NAMA ALKER
- *       └── TEKNISI - SERIAL
- *           ├── FOTO_ALKER.jpg
- *           └── FOTO_SERIAL.jpg
+ * IMAGE
  *************************************************/
 
-function getAlkerRootFolder_(){
+async function fileToBase64(file, max = 1200) {
 
-  if(CONFIG.DRIVE_FOLDER_ID){
+  if (!file) return "";
 
-    return DriveApp.getFolderById(
-      CONFIG.DRIVE_FOLDER_ID
+  const img = await new Promise((resolve, reject) => {
+
+    const i = new Image();
+
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+
+    i.src = URL.createObjectURL(file);
+  });
+
+  const scale =
+    Math.min(
+      1,
+      max / Math.max(img.width, img.height)
     );
 
-  }
+  const c = document.createElement("canvas");
 
-  const folders =
-    DriveApp.getFoldersByName(
-      "ALKER_CONTROL_FILES"
-    );
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
 
-  if(folders.hasNext()){
-
-    return folders.next();
-
-  }
-
-  return DriveApp.createFolder(
-    "ALKER_CONTROL_FILES"
+  c.getContext("2d").drawImage(
+    img,
+    0,
+    0,
+    c.width,
+    c.height
   );
 
-}
-
-
-function cleanFolderName_(name){
-
-  return String(
-    name || "ALKER"
-  )
-  .replace(
-    /[\\\/:*?"<>|#%{}\[\]]/g,
-    " "
-  )
-  .replace(
-    /\s+/g,
-    " "
-  )
-  .trim()
-  .substring(0,120);
-
-}
-
-
-function getAlkerFolder_(
-  itemName
-){
-
-  const root =
-    getAlkerRootFolder_();
-
-  const folderName =
-    cleanFolderName_(
-      itemName
-    );
-
-  const folders =
-    root.getFoldersByName(
-      folderName
-    );
-
-  if(folders.hasNext()){
-
-    return folders.next();
-
-  }
-
-  return root.createFolder(
-    folderName
+  return c.toDataURL(
+    "image/jpeg",
+    0.78
   );
-
 }
 
 
-function getTechnicianFolder_(
-  alkerFolder,
-  technician,
-  serialNumber
-){
+/*************************************************
+ * UI
+ *************************************************/
 
-  const tech =
-    cleanFolderName_(
-      technician ||
-      "TEKNISI"
-    );
+function toast(msg) {
 
-  const serial =
-    cleanFolderName_(
-      serialNumber ||
-      "TANPA_SN"
-    );
+  const t = $("toast");
 
-  const folderName =
-    tech +
-    " - " +
-    serial;
-
-  const folders =
-    alkerFolder.getFoldersByName(
-      folderName
-    );
-
-  if(folders.hasNext()){
-
-    return folders.next();
-
-  }
-
-  return alkerFolder.createFolder(
-    folderName
-  );
-
-}
-
-
-function savePhoto_(
-  dataUrl,
-  filename,
-  folder
-){
-
-  if(!dataUrl){
-
-    return "";
-
-  }
-
-  const match =
-    String(dataUrl).match(
-      /^data:(.+);base64,(.*)$/
-    );
-
-  if(!match){
-
-    return "";
-
-  }
-
-  const mime =
-    match[1];
-
-  const bytes =
-    Utilities.base64Decode(
-      match[2]
-    );
-
-  const blob =
-    Utilities.newBlob(
-      bytes,
-      mime,
-      filename ||
-        ("foto_" +
-        Date.now() +
-        ".jpg")
-    );
-
-  const file =
-    folder
-      ? folder.createFile(blob)
-      : getAlkerRootFolder_()
-          .createFile(blob);
-
-  return file.getUrl();
-
-}
-
-
-function actor_(token){
-  const t=PropertiesService.getScriptProperties().getProperty("SESSION_"+token);
-  if(!t)throw new Error("Sesi tidak valid. Silakan login kembali.");
-  const x=JSON.parse(t); if(new Date(x.exp)<new Date()){PropertiesService.getScriptProperties().deleteProperty("SESSION_"+token);throw new Error("Sesi berakhir.");}
-  return x;
-}
-function requireRole_(u,roles){if(!roles.includes(u.role))throw new Error("Akses tidak diizinkan untuk role ini.")}
-function audit_(u,action,description){
-  const x={auditId:id_("AUD"),actorId:u.userId,actor:u.name,action,description,date:now_()};
-  append_("AUDIT",x); append_("HISTORY",{historyId:id_("HIS"),actorId:u.userId,actor:u.name,action,description,date:x.date});
-}
-
-/**
- * FINAL MASTER ALKER
- * Mengubah daftar ALKER yang sebelumnya terduplikasi antar-divisi
- * menjadi satu MASTER ALKER + mapping loker.
- *
- * Contoh:
- * Splicer = satu item master
- * MASTER_ALKER_LOKER = IOAN / ASSURANCE, PSB / FULFILLMENT, MAINTENANCE / OSP
- *
- * Jalankan SEKALI setelah mengganti Code.gs dengan versi ini:
- * 1. simpan
- * 2. pilih migrateMasterFinal
- * 3. jalankan
- */
-function normalizeName_(s){
-  return String(s||"").toLowerCase()
-    .replace(/\([^)]*\)/g,"")
-    .replace(/\s+/g," ")
-    .trim();
-}
-
-function migrateMasterFinal(){
-  const old = rows_("MASTER_ALKER");
-  if(!old.length){
-    setupSystem();
+  if (!t) {
+    alert(msg);
     return;
   }
 
-  // Kumpulkan item berdasarkan nama normalisasi.
-  const grouped = {};
-  old.forEach(x=>{
-    const key = normalizeName_(x.itemName);
-    if(!key) return;
-    if(!grouped[key]) grouped[key]={
-      itemName:x.itemName,
-      category:x.category||"ALKER",
-      unit:x.unit||"UNIT",
-      standardPrice:Number(x.standardPrice||0),
-      spec:x.spec||"",
-      lokers:new Set()
-    };
-    const g=grouped[key];
-    if(!g.category && x.category) g.category=x.category;
-    if(!g.unit && x.unit) g.unit=x.unit;
-    if(Number(x.standardPrice||0)>g.standardPrice) g.standardPrice=Number(x.standardPrice||0);
-    if(x.spec && !g.spec) g.spec=x.spec;
-    String(x.lokers||"").split("|").map(s=>s.trim()).filter(Boolean).forEach(l=>g.lokers.add(l));
-  });
+  t.textContent = msg;
 
-  // Jika mapping lama belum ada, ambil loker dari item lama.
-  // Data item yang sama otomatis digabung.
-  const newItems=[];
-  const mappings=[];
-  let no=1;
-  Object.keys(grouped).sort().forEach(key=>{
-    const g=grouped[key];
-    const itemId="ALK-"+String(no++).padStart(4,"0");
-    newItems.push({
-      itemId,
-      itemName:g.itemName,
-      category:g.category,
-      unit:g.unit,
-      standardPrice:g.standardPrice,
-      lokers:Array.from(g.lokers).join("|"),
-      spec:g.spec,
-      active:"Y",
-      createdAt:now_()
-    });
-    Array.from(g.lokers).forEach(l=>{
-      mappings.push({mappingId:id_("MAP"),itemId,loker:l,active:"Y",createdAt:now_()});
-    });
-  });
+  t.classList.add("show");
 
-  // Buat mapping sheet jika belum ada.
-  let mapSh=sheet_("MASTER_ALKER_LOKER");
-  if(!mapSh){
-    mapSh=ss_().insertSheet("MASTER_ALKER_LOKER");
-    mapSh.appendRow(HEADERS.MASTER_ALKER_LOKER);
-  }
-
-  // Simpan isi lama sebagai backup sheet sebelum mengganti master.
-  const ss=ss_();
-  let backup=ss.getSheetByName("MASTER_ALKER_BACKUP");
-  if(!backup){
-    backup=ss.insertSheet("MASTER_ALKER_BACKUP");
-    backup.getRange(1,1,1,HEADERS.MASTER_ALKER.length).setValues([HEADERS.MASTER_ALKER]);
-  }
-  old.forEach(x=>backup.appendRow(HEADERS.MASTER_ALKER.map(h=>x[h]??"")));
-
-  // Mapping old itemId -> canonical itemId.
-  const oldToNew={};
-  old.forEach(x=>{
-    const key=normalizeName_(x.itemName);
-    const match=newItems.find(n=>normalizeName_(n.itemName)===key);
-    if(match)oldToNew[x.itemId]=match.itemId;
-  });
-
-  // Rewrite master.
-  const masterSh=sheet_("MASTER_ALKER");
-  if(masterSh.getLastRow()>1)masterSh.getRange(2,1,masterSh.getLastRow()-1,HEADERS.MASTER_ALKER.length).clearContent();
-  if(newItems.length)masterSh.getRange(2,1,newItems.length,HEADERS.MASTER_ALKER.length)
-    .setValues(newItems.map(x=>HEADERS.MASTER_ALKER.map(h=>x[h]??"")));
-
-  // Rewrite mapping.
-  if(mapSh.getLastRow()>1)mapSh.getRange(2,1,mapSh.getLastRow()-1,HEADERS.MASTER_ALKER_LOKER.length).clearContent();
-  if(mappings.length)mapSh.getRange(2,1,mappings.length,HEADERS.MASTER_ALKER_LOKER.length)
-    .setValues(mappings.map(x=>HEADERS.MASTER_ALKER_LOKER.map(h=>x[h]??"")));
-
-  // Update foreign keys in transactional tables.
-  ["INVENTORY","INITIAL_INVENTORY","REQUESTS","RECEIVING","PROCUREMENT"].forEach(sheetName=>{
-    const data=rows_(sheetName);
-    data.forEach(row=>{
-      if(row.itemId && oldToNew[row.itemId]){
-        updateById_(sheetName,
-          HEADERS[sheetName][0],
-          row[HEADERS[sheetName][0]],
-          {itemId:oldToNew[row.itemId]}
-        );
-      }
-    });
-  });
-
-  audit_(
-    {userId:"SYSTEM",name:"SYSTEM"},
-    "MASTER_MIGRATION",
-    "Master ALKER dinormalisasi menjadi "+newItems.length+" jenis unik dan mapping loker dibuat."
-  );
-  SpreadsheetApp.flush();
-  Logger.log("FINAL MASTER OK: "+newItems.length+" item unik, "+mappings.length+" mapping loker.");
-}
-
-function getAllowedLokerItems_(loker){
-  const maps=rows_("MASTER_ALKER_LOKER").filter(x=>x.loker===loker&&String(x.active||"Y").toUpperCase()==="Y");
-  const ids=new Set(maps.map(x=>x.itemId));
-  return rows_("MASTER_ALKER").filter(x=>ids.has(x.itemId)&&x.active==="Y");
-}
-
-function setupSystem(){
-  const ss=ss_();
-  SHEETS.forEach(n=>{
-    let sh=ss.getSheetByName(n); if(!sh)sh=ss.insertSheet(n);
-    if(sh.getLastRow()===0)sh.appendRow(HEADERS[n]);
-    else {
-      const expected=HEADERS[n]||[];
-      const current=sh.getRange(1,1,1,Math.max(sh.getLastColumn(),1)).getValues()[0];
-      expected.forEach((header,i)=>{ if(!current[i]) sh.getRange(1,i+1).setValue(header); });
-    }
-    sh.setFrozenRows(1);
-  });
-  if(rows_("LOKERS").length===0)SEED_LOKERS.forEach((name,i)=>append_("LOKERS",{lokerId:id_("LOK"),name,status:"AKTIF",createdAt:now_()}));
-  if(rows_("MASTER_ALKER").length===0)SEED_ITEMS.forEach(x=>append_("MASTER_ALKER",{itemId:x[0],itemName:x[1],category:x[2],unit:x[3],standardPrice:x[4],lokers:x[5],spec:x[6],active:x[7],createdAt:now_()}));
-  ensureSplicerBrandPrices_();
-  if(rows_("USERS").length===0){
-    SEED_USERS.forEach((x,i)=>append_("USERS",{userId:x[0],username:x[1],passwordHash:hash_(["admin123","gudang123","leader123","teknisi123"][i]),name:x[3],role:x[4],loker:x[5],active:"Y",createdAt:now_()}));
-  }
-  ensureTechnicianMirror_();
-  // Jika mapping kosong dan master masih berisi daftar lama, buat mapping awal.
-  if(rows_("MASTER_ALKER_LOKER").length===0){
-    rows_("MASTER_ALKER").forEach(x=>{
-      String(x.lokers||"").split("|").map(s=>s.trim()).filter(Boolean).forEach(l=>{
-        append_("MASTER_ALKER_LOKER",{mappingId:id_("MAP"),itemId:x.itemId,loker:l,active:"Y",createdAt:now_()});
-      });
-    });
-  }
-  SpreadsheetApp.flush();
-  Logger.log("ALKER CONTROL siap.");
-}
-/*************************************************
- * TEKNISI TEAM
- *************************************************/
-
-function technicianUsers_(){
-  return rows_("USERS")
-    .filter(x =>
-      String(x.role || "").toUpperCase() === "TEKNISI" &&
-      String(x.active || "").toUpperCase() === "Y"
-    )
-    .map(x => ({
-      userId: x.userId,
-      username: x.username,
-      name: x.name,
-      loker: x.loker,
-      active: x.active,
-      leaderId: x.leaderId || ""
-    }));
+  setTimeout(() => {
+    t.classList.remove("show");
+  }, 2600);
 }
 
 
-function technicianTeams_(){
-
-  const users = technicianUsers_();
-  const userMap = {};
-
-  users.forEach(x => {
-    userMap[x.userId] = x;
-  });
-
-  return rows_("TEKNISI_TEAM")
-    .filter(x =>
-      String(x.active || "").toUpperCase() === "Y"
-    )
-    .map(x => ({
-      teamId: x.teamId,
-      loker: x.loker,
-
-      technicianId: x.technicianId,
-      technicianName:
-        userMap[x.technicianId]?.name || "-",
-
-      partnerId: x.partnerId || "",
-      partnerName: x.partnerId
-        ? (userMap[x.partnerId]?.name || "-")
-        : "",
-
-      active: x.active,
-      createdAt: x.createdAt,
-      updatedAt: x.updatedAt
-    }));
+function ensureCompactDetailStyles() {
+  if (document.getElementById("alkerCompactDetailStyles")) return;
+  const style = document.createElement("style");
+  style.id = "alkerCompactDetailStyles";
+  style.textContent = `
+    #modalBody .detail-grid { gap: 7px !important; }
+    #modalBody .detail-box { padding: 8px 10px !important; min-height: 0 !important; border-radius: 9px !important; box-sizing: border-box; }
+    #modalBody .detail-box > span { display: block; font-size: 10px !important; line-height: 1.2 !important; margin-bottom: 4px !important; }
+    #modalBody .detail-box > strong { font-size: 11px !important; line-height: 1.3 !important; }
+    #modalBody .detail-grid + div { margin-top: 10px !important; }
+  `;
+  document.head.appendChild(style);
 }
 
-
-/**
- * Mengambil data tim + daftar teknisi.
- *
- * TEKNISI:
- *   hanya melihat tim yang mengandung dirinya.
- *
- * LEADER:
- *   hanya melihat teknisi/tim pada lokernya.
- *
- * ADMIN / SPV_GUDANG:
- *   melihat semua.
- */
-function technicianTeam_(u){
-
-  const teams =
-    technicianTeams_();
-
-  const users =
-    technicianUsers_();
-
-
-  /*
-   * ==========================================
-   * TEKNISI
-   * ==========================================
-   */
-
-  if(
-    u.role === "TEKNISI"
-  ){
-
-    const mine =
-      teams.find(
-        x =>
-          x.technicianId ===
-            u.userId
-          ||
-          x.partnerId ===
-            u.userId
-      );
-
-
-    return {
-
-      team:
-        mine || null,
-
-      technicians:
-        users.filter(
-          x =>
-            x.loker ===
-            u.loker
-        )
-
-    };
-
-  }
-
-
-  /*
-   * ==========================================
-   * LEADER
-   * ==========================================
-   *
-   * Leader mengelola seluruh
-   * loker operasional.
-   */
-
-  if(
-    u.role === "LEADER"
-  ){
-
-    const operationalLokers = [
-
-      "IOAN / ASSURANCE",
-
-      "PSB / FULFILLMENT",
-
-      "MAINTENANCE / OSP"
-
-    ];
-
-
-    return {
-
-      teams:
-        teams.filter(
-          x => {
-            const memberIds = [String(x.technicianId || ""), String(x.partnerId || "")];
-            return operationalLokers.includes(x.loker) &&
-              users.some(t => memberIds.includes(String(t.userId)) && String(t.leaderId || "") === String(u.userId));
-          }
-        ),
-
-      technicians:
-        users.filter(
-          x =>
-            String(x.leaderId || "") === String(u.userId) &&
-            operationalLokers.includes(x.loker)
-        )
-
-    };
-
-  }
-
-
-  /*
-   * ==========================================
-   * ADMIN / SPV GUDANG
-   * ==========================================
-   */
-
-  if(
-    u.role === "ADMIN" ||
-    u.role === "SPV_GUDANG"
-  ){
-
-    return {
-
-      teams:
-        teams,
-
-      technicians:
-        users
-
-    };
-
-  }
-
-
-  throw new Error(
-    "Akses data tim teknisi tidak diizinkan."
-  );
-
-}
-
-/**
- * Membuat / memperbarui tim.
- */
-function saveTechnicianTeam_(u,p){
-
-  requireRole_(
-    u,
-    [
-      "ADMIN",
-      "LEADER"
-    ]
-  );
-
-
-  const technicianId =
-    String(
-      p.technicianId || ""
-    ).trim();
-
-
-  const partnerId =
-    String(
-      p.partnerId || ""
-    ).trim();
-
-
-  const teamId =
-    String(
-      p.teamId || ""
-    ).trim();
-
-
-  if(!technicianId){
-
-    throw new Error(
-      "Teknisi Utama / Teknisi 1 wajib dipilih."
-    );
-
-  }
-
-
-  if(
-    partnerId &&
-    technicianId === partnerId
-  ){
-
-    throw new Error(
-      "Teknisi Utama dan Teknisi 2 tidak boleh orang yang sama."
-    );
-
-  }
-
-
-  const users =
-    technicianUsers_();
-
-
-  const technician =
-    users.find(
-      x =>
-        x.userId ===
-        technicianId
-    );
-
-
-  if(!technician){
-
-    throw new Error(
-      "Teknisi Utama tidak ditemukan."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * TEKNISI UTAMA WAJIB PUNYA ALKER
-   * ==========================================
-   */
-
-  const mainInventory =
-    rows_("INVENTORY").filter(
-      x =>
-
-        String(
-          x.holderId || ""
-        ) === technicianId
-
-        &&
-
-        String(
-          x.status || ""
-        ).toUpperCase() ===
-        "DIPAKAI"
-
-        &&
-
-        String(
-          x.location || ""
-        ).toUpperCase() ===
-        "TEKNISI"
-    );
-
-
-  if(
-    mainInventory.length === 0
-  ){
-
-    throw new Error(
-      "Teknisi Utama belum memiliki ALKER resmi. Teknisi tersebut belum dapat dijadikan Teknisi 1."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * PARTNER / TEKNISI 2
-   * ==========================================
-   */
-
-  let partner = null;
-
-
-  if(partnerId){
-
-    partner =
-      users.find(
-        x =>
-          x.userId ===
-          partnerId
-      );
-
-
-    if(!partner){
-
-      throw new Error(
-        "Teknisi 2 / Partner tidak ditemukan."
-      );
-
-    }
-
-
-    /*
-     * Teknisi 2 tidak wajib punya ALKER,
-     * tetapi harus satu loker dengan Teknisi 1.
-     */
-
-    if(
-      partner.loker !==
-      technician.loker
-    ){
-
-      throw new Error(
-        "Teknisi 1 dan Teknisi 2 harus berada pada loker/divisi yang sama."
-      );
-
-    }
-
-  }
-
-
-  /*
-   * ==========================================
-   * LEADER
-   * ==========================================
-   */
-
-  if(
-    u.role === "LEADER"
-  ){
-
-    const operationalLokers = [
-
-      "IOAN / ASSURANCE",
-
-      "PSB / FULFILLMENT",
-
-      "MAINTENANCE / OSP"
-
-    ];
-
-
-    if(
-      !operationalLokers.includes(
-        technician.loker
-      )
-    ){
-
-      throw new Error(
-        "Loker teknisi tidak valid."
-      );
-
-    }
-
-  }
-
-
-  /*
-   * ==========================================
-   * CEK TEKNISI SUDAH ADA DI TEAM LAIN
-   * ==========================================
-   */
-
-  const activeTeams =
-    rows_("TEKNISI_TEAM")
-      .filter(
-        x =>
-          String(
-            x.active || ""
-          ).toUpperCase() ===
-          "Y"
-      )
-      .filter(
-        x =>
-          x.teamId !==
-          teamId
-      );
-
-
-  const conflict =
-    activeTeams.find(
-      x => {
-
-        const ids = [
-
-          x.technicianId,
-
-          x.partnerId
-
-        ].filter(Boolean);
-
-
-        return (
-
-          ids.includes(
-            technicianId
-          )
-
-          ||
-
-          (
-            partnerId &&
-            ids.includes(
-              partnerId
-            )
-          )
-
-        );
-
-      }
-    );
-
-
-  if(conflict){
-
-    throw new Error(
-      "Teknisi 1 atau Teknisi 2 sudah berada dalam Team aktif lain."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * UPDATE
-   * ==========================================
-   */
-
-  if(teamId){
-
-    const existing =
-      rows_(
-        "TEKNISI_TEAM"
-      ).find(
-        x =>
-          x.teamId ===
-          teamId
-      );
-
-
-    if(!existing){
-
-      throw new Error(
-        "Team yang akan diperbarui tidak ditemukan."
-      );
-
-    }
-
-
-    updateById_(
-      "TEKNISI_TEAM",
-      "teamId",
-      teamId,
-      {
-
-        loker:
-          technician.loker,
-
-        technicianId:
-          technicianId,
-
-        partnerId:
-          partnerId,
-
-        active:
-          "Y",
-
-        updatedAt:
-          now_()
-
-      }
-    );
-
-
-    audit_(
-      u,
-      "TEAM_UPDATE",
-      teamId +
-      " : " +
-      technician.name +
-      (
-        partner
-          ? " + " +
-            partner.name
-          : ""
-      )
-    );
-
-
-    return ok_({
-
-      teamId:
-        teamId,
-
-      message:
-        "Team teknisi berhasil diperbarui."
-
-    });
-
-  }
-
-
-  /*
-   * ==========================================
-   * CREATE
-   * ==========================================
-   */
-
-  const newTeamId =
-    id_("TIM");
-
-
-  append_(
-    "TEKNISI_TEAM",
-    {
-
-      teamId:
-        newTeamId,
-
-      loker:
-        technician.loker,
-
-      technicianId:
-        technicianId,
-
-      partnerId:
-        partnerId,
-
-      active:
-        "Y",
-
-      createdAt:
-        now_(),
-
-      updatedAt:
-        now_()
-
-    }
-  );
-
-
-  audit_(
-    u,
-    "TEAM_CREATE",
-    newTeamId +
-    " : " +
-    technician.name +
-    (
-      partner
-        ? " + " +
-          partner.name
-        : ""
-    )
-  );
-
-
-  return ok_({
-
-    teamId:
-      newTeamId,
-
-    message:
-      "Team teknisi berhasil dibuat."
-
-  });
-
-}
-
-/**
- * Nonaktifkan tim.
- * Data tidak dihapus.
- */
-function deleteTechnicianTeam_(u,p){
-
-  requireRole_(u,[
-    "ADMIN",
-    "SPV_GUDANG",
-    "LEADER"
-  ]);
-
-  const teamId =
-    String(p.teamId || "").trim();
-
-
-  if(!teamId){
-    throw new Error(
-      "ID tim tidak ditemukan."
-    );
-  }
-
-
-  const team =
-    rows_("TEKNISI_TEAM")
-      .find(x =>
-        x.teamId === teamId
-      );
-
-
-  if(!team){
-    throw new Error(
-      "Tim tidak ditemukan."
-    );
-  }
-
-
-  updateById_(
-    "TEKNISI_TEAM",
-    "teamId",
-    teamId,
-    {
-      active: "N",
-      updatedAt: now_()
-    }
-  );
-
-
-  audit_(
-    u,
-    "TEAM_DELETE",
-    teamId
-  );
-
-
-  return ok_({
-    message:
-      "Tim berhasil dinonaktifkan."
-  });
-}
-function doGet(e){return json_({ok:true,service:"ALKER CONTROL API",time:now_()})}
-function doPost(e){
-  try{
-    const p=e.parameter||{}, action=p.action||"";
-    if(action==="login")return login_(p);
-    const u=actor_(p.token);
-    switch(action){
-      case "me":return ok_({session:u});
-      case "dashboard":return ok_(dashboard_(u));
-      case "masters":return ok_(masters_(u));
-      case "inventory":return ok_(inventory_(u,p.scope));
-      case "leaderOwnInventoryAdd":return leaderOwnInventoryAdd_(u,p);
-      case "leaderAddInventory":return leaderAddInventory_(u,p);
-      case "initialSubmit":return initialSubmit_(u,p);
-      case "initialResubmit":return initialResubmit_(u,p);
-      case "initialMine":return ok_(initialMine_(u));
-      case "leaderInitialReports":return ok_(leaderInitialReports_(u));
-      case "initialPending":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(rows_("INITIAL_INVENTORY").filter(x=>x.status==="MENUNGGU VERIFIKASI"));
-      case "initialDecision":return initialDecision_(u,p);
-      case "requests":return ok_(requests_(u,p.scope));
-      case "createRequest":return createRequest_(u,p);
-      case "requestDecision":return requestDecision_(u,p);
-      case "issues":return ok_(issues_(u,p.scope));
-      case "reportIssue":return reportIssue_(u,p);
-      case "returns":return ok_(returns_(u,p.scope));
-      case "returnItem":return returnItem_(u,p);
-	  case "returnDecision":return returnDecision_(u,p);
-      case "warehouse":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(warehouse_());
-	  case "masterPrices":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(masterPrices_(u));
-      case "masterBrandPrices":return ok_(masterBrandPrices_(u,p.itemId));
-      case "updateMasterBrandPrices":return updateMasterBrandPrices_(u,p);
-      case "receiving":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(rows_("RECEIVING"));
-      case "receive":return receive_(u,p);
-      case "warehouseStockAdd":return warehouseStockAdd_(u,p);
-      case "distribution":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(rows_("DISTRIBUTION"));
-      case "distribute":return distribute_(u,p);
-      case "procurement":requireRole_(u,["SPV_GUDANG","ADMIN"]);return ok_(rows_("PROCUREMENT"));
-      case "createProcurement":return createProcurement_(u,p);
-      case "technicians":return technicians_(u,p.scope);
-      case "users":return ok_(users_(u));
-      case "saveUser":return saveUser_(u,p);
-	  case "deleteUser":return deleteUser_(u,p);
-      case "technicianTeam": return ok_(technicianTeam_(u));
-      case "saveTechnicianTeam":return saveTechnicianTeam_(u,p);
-      case "photoPreview":return photoPreview_(u,p);
-      case "deleteTechnicianTeam":return deleteTechnicianTeam_(u,p);
-      case "addMasterItem":requireRole_(u,["ADMIN"]);return addMasterItem_(u,p);
-      case "updateMasterItemStatus":return updateMasterItemStatus_(u,p);
-      case "updateMasterItemLokers":return updateMasterItemLokers_(u,p);
-      case "updateMasterPhotoMode":return updateMasterPhotoMode_(u,p);
-	  case "updateMasterPrice":requireRole_(u,["SPV_GUDANG","ADMIN"]);return updateMasterPrice_(u,p);
-      case "migrateMasterFinal":requireRole_(u,["ADMIN"]);migrateMasterFinal();return ok_({message:"Master ALKER berhasil dinormalisasi."});
-      case "audit":requireRole_(u,["ADMIN"]);return ok_(rows_("AUDIT").slice(-500).reverse());
-      default:throw new Error("Action tidak dikenal.");
-    }
-  }catch(err){
-
-  console.error(err);
-
-  return fail_(
-    "ERROR: " +
-    (err && err.message
-      ? err.message
-      : String(err))
-  );
-
-}
-}
-function login_(p){
-  const username = String(p.username || "").trim();
-  const password = String(p.password || "");
-
-  const us = rows_("USERS").find(x =>
-    String(x.username || "").trim().toLowerCase() === username.toLowerCase() &&
-    String(x.active || "").trim().toUpperCase() === "Y"
-  );
-
-  if(!us){
-    throw new Error("Username tidak ditemukan atau tidak aktif.");
-  }
-
-  if(String(us.passwordHash).trim() !== hash_(password)){
-    throw new Error("Password salah.");
-  }
-
-  const token=Utilities.getUuid();
-
-  const obj={
-    token,
-    userId:us.userId,
-    name:us.name,
-    role:us.role,
-    loker:us.loker,
-    leaderId:us.leaderId || "",
-    exp:new Date(
-      Date.now()+CONFIG.SESSION_HOURS*3600000
-    ).toISOString()
-  };
-
-  PropertiesService
-    .getScriptProperties()
-    .setProperty(
-      "SESSION_"+token,
-      JSON.stringify(obj)
-    );
-
-  return ok_({session:obj});
-}
-function ensureMasterPhotoModeColumn_(){
-  const sh=sheet_("MASTER_ALKER");
-  if(!sh) return;
-  const col=HEADERS.MASTER_ALKER.indexOf("photoMode")+1;
-  if(col>0 && String(sh.getRange(1,col).getValue()||"").trim()==="") sh.getRange(1,col).setValue("photoMode");
-}
-
-function masters_(u){
-  ensureMasterPhotoModeColumn_();
-  const lokers=rows_("LOKERS").filter(x=>x.status==="AKTIF");
-  let items=rows_("MASTER_ALKER").filter(x=>String(x.active||"Y").toUpperCase()==="Y");
-  if(u.role==="ADMIN") items=rows_("MASTER_ALKER");
-  if(u.role==="TEKNISI" && u.loker) items=getAllowedLokerItems_(u.loker);
-  return {
-    lokers,
-    items,
-    mappings:rows_("MASTER_ALKER_LOKER").filter(x=>x.active==="Y")
-  };
-}
-/*************************************************
- * MASTER USER / MASTER TEKNISI
- *************************************************/
-
-function users_(u){
-
-  requireRole_(u,[
-    "ADMIN",
-    "LEADER"
-  ]);
-
-
-  let users =
-    rows_("USERS");
-
-
-  /*
-   * ==========================================
-   * LEADER
-   * ==========================================
-   *
-   * Leader hanya melihat TEKNISI.
-   *
-   * Leader dapat mengelola teknisi
-   * dari tiga loker operasional:
-   *
-   * IOAN / ASSURANCE
-   * PSB / FULFILLMENT
-   * MAINTENANCE / OSP
-   */
-
-  if(
-    u.role ===
-    "LEADER"
-  ){
-
-    users =
-      users.filter(
-        x =>
-          String(x.role || "").toUpperCase() === "TEKNISI" &&
-          String(x.leaderId || "") === String(u.userId)
-      );
-
-  }
-
-
-  /*
-   * ==========================================
-   * ADMIN
-   * ==========================================
-   *
-   * Admin tetap melihat seluruh user.
-   */
-
-  const allUsers = rows_("USERS");
-  const leaderNames = Object.fromEntries(
-    allUsers.filter(x => String(x.role || "").toUpperCase() === "LEADER")
-      .map(x => [String(x.userId), String(x.name || x.username || "Leader")])
-  );
-
-  return users.map(
-    x => ({
-      userId: x.userId,
-      username: x.username,
-      name: x.name,
-      role: x.role,
-      loker: x.loker,
-      active: x.active,
-      createdAt: x.createdAt,
-      leaderId: x.leaderId || "",
-      leaderName: leaderNames[String(x.leaderId || "")] || "Belum ditentukan"
-    })
-  );
-
-}
-
-/*************************************************
- * CREATE / UPDATE USER
- *************************************************/
-
-function saveUser_(u,p){
-
-  requireRole_(u,[
-    "ADMIN",
-    "LEADER"
-  ]);
-
-
-  const userId =
-    String(
-      p.userId || ""
-    ).trim();
-
-
-  const username =
-    String(
-      p.username || ""
-    ).trim();
-
-
-  const name =
-    String(
-      p.name || ""
-    ).trim();
-
-
-  const role =
-    String(
-      p.role || ""
-    )
-    .trim()
-    .toUpperCase();
-
-
-  let loker =
-    String(
-      p.loker || ""
-    ).trim();
-
-  let leaderId = String(p.leaderId || "").trim();
-
-
-  const password =
-    String(
-      p.password || ""
-    );
-
-
-  const active =
-    String(
-      p.active || "Y"
-    ).toUpperCase() === "N"
-      ? "N"
-      : "Y";
-
-
-  if(!username){
-
-    throw new Error(
-      "Username wajib diisi."
-    );
-
-  }
-
-
-  if(!name){
-
-    throw new Error(
-      "Nama wajib diisi."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * LEADER
-   * ==========================================
-   *
-   * Leader hanya boleh membuat / mengubah
-   * user TEKNISI.
-   */
-
-  if(u.role === "LEADER"){
-
-    if(role !== "TEKNISI"){
-
-      throw new Error(
-        "Leader hanya dapat membuat user TEKNISI."
-      );
-
-    }
-
-
-    const teknisiLokers = [
-
-      "IOAN / ASSURANCE",
-
-      "PSB / FULFILLMENT",
-
-      "MAINTENANCE / OSP"
-
-    ];
-
-
-    if(
-      !teknisiLokers.includes(loker)
-    ){
-
-      throw new Error(
-        "Pilih loker teknisi yang valid."
-      );
-
-    }
-
-  }
-
-
-  /*
-   * ==========================================
-   * ADMIN
-   * ==========================================
-   */
-
-  if(u.role === "ADMIN"){
-
-    const allowedRoles = [
-
-      "ADMIN",
-
-      "SPV_GUDANG",
-
-      "LEADER",
-
-      "TEKNISI"
-
-    ];
-
-
-    if(
-      !allowedRoles.includes(role)
-    ){
-
-      throw new Error(
-        "Role tidak valid."
-      );
-
-    }
-
-  }
-
-
-  /*
-   * TEKNISI harus berada pada
-   * loker operasional.
-   */
-
-  if(role === "TEKNISI"){
-
-    const teknisiLokers = [
-
-      "IOAN / ASSURANCE",
-
-      "PSB / FULFILLMENT",
-
-      "MAINTENANCE / OSP"
-
-    ];
-
-
-    if(
-      !teknisiLokers.includes(loker)
-    ){
-
-      throw new Error(
-        "Loker teknisi tidak valid."
-      );
-
-    }
-
-  }
-
-
-  // Penempatan Leader hanya dapat ditentukan oleh ADMIN.
-  if(role === "TEKNISI") {
-    if(u.role === "LEADER") {
-      leaderId = u.userId;
-    } else if(u.role === "ADMIN" && leaderId) {
-      const selectedLeader = rows_("USERS").find(x =>
-        String(x.userId) === leaderId &&
-        String(x.role || "").toUpperCase() === "LEADER" &&
-        String(x.active || "Y").toUpperCase() === "Y"
-      );
-      if(!selectedLeader) throw new Error("Leader yang dipilih tidak ditemukan atau tidak aktif.");
-      if(selectedLeader.loker && selectedLeader.loker !== "LEADER") {
-        // Loker operasional teknisi tetap ditentukan pada akun teknisi.
-      }
-    } else if(u.role !== "ADMIN" && u.role !== "LEADER") {
-      leaderId = "";
-    }
-  } else {
-    leaderId = "";
-  }
-
-  /*
-   * ==========================================
-   * CEK USERNAME
-   * ==========================================
-   */
-
-  const duplicate =
-    rows_("USERS").find(x =>
-
-      String(x.username || "")
-        .trim()
-        .toLowerCase()
-      ===
-      username.toLowerCase()
-
-      &&
-      x.userId !== userId
-
-    );
-
-
-  if(duplicate){
-
-    throw new Error(
-      "Username sudah digunakan."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * UPDATE
-   * ==========================================
-   */
-
-  if(userId){
-
-    const existing =
-      rows_("USERS").find(
-        x =>
-          x.userId === userId
-      );
-
-
-    if(!existing){
-
-      throw new Error(
-        "User yang akan diperbarui tidak ditemukan."
-      );
-
-    }
-
-
-    /*
-     * Leader tidak boleh mengubah
-     * user menjadi bukan TEKNISI.
-     */
-
-    if(
-      u.role === "LEADER" &&
-      existing.role !== "TEKNISI"
-    ){
-
-      throw new Error(
-        "Leader hanya dapat mengelola user TEKNISI."
-      );
-
-    }
-
-
-    const patch = {
-
-      name:
-        name,
-
-      username:
-        username,
-
-      role:
-        role,
-
-      loker:
-        loker,
-
-      active:
-        active,
-
-      leaderId: leaderId,
-
-      updatedAt:
-        now_()
-
-    };
-
-
-    if(password){
-
-      patch.passwordHash =
-        hash_(password);
-
-    }
-
-
-    updateById_(
-      "USERS",
-      "userId",
-      userId,
-      patch
-    );
-
-
-    audit_(
-      u,
-      "USER_UPDATE",
-      userId +
-      " : " +
-      name
-    );
-
-
-    return ok_({
-
-      userId:
-        userId,
-
-      message:
-        "User berhasil diperbarui."
-
-    });
-
-  }
-
-
-  /*
-   * ==========================================
-   * CREATE
-   * ==========================================
-   */
-
-  if(!password){
-
-    throw new Error(
-      "Password wajib diisi."
-    );
-
-  }
-
-
-  const newUserId =
-    id_("USR");
-
-
-  append_(
-    "USERS",
-    {
-
-      userId:
-        newUserId,
-
-      username:
-        username,
-
-      passwordHash:
-        hash_(password),
-
-      name:
-        name,
-
-      role:
-        role,
-
-      loker:
-        loker,
-
-      active:
-        active,
-
-      createdAt:
-        now_(),
-
-      leaderId: leaderId
-
-    }
-  );
-
-
-  audit_(
-    u,
-    "USER_CREATE",
-    newUserId +
-    " : " +
-    name +
-    " : " +
-    role +
-    " : " +
-    loker
-  );
-
-
-  return ok_({
-
-    userId:
-      newUserId,
-
-    message:
-      "User berhasil dibuat."
-
-  });
-
-}
-
-/*************************************************
- * NONAKTIFKAN USER TEKNISI
- *
- * ADMIN  : boleh menonaktifkan TEKNISI
- * LEADER : boleh menonaktifkan TEKNISI
- *
- * Tidak menghapus data USERS secara fisik.
- * Data inventory / request / audit tetap aman.
- *************************************************/
-
-function deleteUser_(u,p){
-
-  requireRole_(u,[
-    "ADMIN",
-    "LEADER"
-  ]);
-
-
-  const userId =
-    String(
-      p.userId || ""
-    ).trim();
-
-
-  if(!userId){
-
-    throw new Error(
-      "ID user tidak ditemukan."
-    );
-
-  }
-
-
-  const target =
-    rows_("USERS").find(
-      x =>
-        String(x.userId) ===
-        userId
-    );
-
-
-  if(!target){
-
-    throw new Error(
-      "User tidak ditemukan."
-    );
-
-  }
-
-
-  const targetRole =
-    String(
-      target.role || ""
-    )
-    .trim()
-    .toUpperCase();
-
-
-  /*
-   * HANYA TEKNISI
-   */
-
-  if(
-    targetRole !==
-    "TEKNISI"
-  ){
-
-    throw new Error(
-      "Yang dapat dinonaktifkan dari menu ini hanya user TEKNISI."
-    );
-
-  }
-
-
-  /*
-   * Jangan sampai akun sendiri
-   * dinonaktifkan.
-   */
-
-  if(
-    target.userId ===
-    u.userId
-  ){
-
-    throw new Error(
-      "Anda tidak dapat menonaktifkan akun sendiri."
-    );
-
-  }
-
-
-  /*
-   * Sudah nonaktif
-   */
-
-  if(
-    String(
-      target.active || ""
-    ).toUpperCase() ===
-    "N"
-  ){
-
-    throw new Error(
-      "Teknisi tersebut sudah NONAKTIF."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * NONAKTIFKAN USER
-   * ==========================================
-   */
-
-  updateById_(
-    "USERS",
-    "userId",
-    userId,
-    {
-      active:
-        "N",
-
-      updatedAt:
-        now_()
-    }
-  );
-
-
-  /*
-   * ==========================================
-   * NONAKTIFKAN MIRROR TEKNISI
-   * ==========================================
-   */
-
-  const technician =
-    rows_("TEKNISI")
-      .find(
-        x =>
-          String(
-            x.technicianId || ""
-          ) ===
-          userId
-      );
-
-
-  if(technician){
-
-    updateById_(
-      "TEKNISI",
-      "technicianId",
-      userId,
-      {
-        status:
-          "NONAKTIF"
-      }
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * NONAKTIFKAN TIM AKTIF
-   * ==========================================
-   *
-   * Teknisi yang sudah resign
-   * tidak boleh tetap tercatat
-   * sebagai anggota tim aktif.
-   */
-
-  const teams =
-    rows_("TEKNISI_TEAM");
-
-
-  teams
-    .filter(
-      x =>
-        String(
-          x.technicianId || ""
-        ) === userId
-        ||
-        String(
-          x.partnerId || ""
-        ) === userId
-    )
-    .filter(
-      x =>
-        String(
-          x.active || ""
-        ).toUpperCase() ===
-        "Y"
-    )
-    .forEach(
-      x => {
-
-        updateById_(
-          "TEKNISI_TEAM",
-          "teamId",
-          x.teamId,
-          {
-            active:
-              "N",
-
-            updatedAt:
-              now_()
-          }
-        );
-
-      }
-    );
-
-
-  /*
-   * ==========================================
-   * AUDIT
-   * ==========================================
-   */
-
-  audit_(
-    u,
-    "USER_DEACTIVATE",
-    userId +
-    " : " +
-    target.name +
-    " / " +
-    target.username
-  );
-
-
-  return ok_({
-
-    userId:
-      userId,
-
-    message:
-      "Teknisi berhasil dinonaktifkan."
-
-  });
-
-}
-
-/*************************************************
- * SYNC USER -> TEKNISI
- *************************************************/
-
-function syncTechnicianUser_(userId){
-
-  const user =
-    rows_("USERS")
-      .find(x =>
-        x.userId === userId
-      );
-
-  if(!user){
+function openModal(title, html) {
+  ensureCompactDetailStyles();
+
+  if (!$("modal")) {
+    alert(html.replace(/<[^>]+>/g, ""));
     return;
   }
 
-
-  const technicians =
-    rows_("TEKNISI");
-
-
-  const existing =
-    technicians.find(x =>
-      x.technicianId === userId
-    );
+  $("modalTitle").textContent = title;
+  $("modalBody").innerHTML = html;
+  $("modal").classList.remove("hidden");
+}
 
 
-  /*
-   * Jika bukan TEKNISI,
-   * hapus/nonaktifkan mirror.
-   */
-  if(user.role !== "TEKNISI"){
+function closeModal() {
 
-    if(existing){
+  $("modal")?.classList.add("hidden");
+}
 
-      updateById_(
-        "TEKNISI",
-        "technicianId",
-        userId,
+window.closeModal = closeModal;
+
+// Logout otomatis setelah satu jam sejak login, termasuk jika halaman dibiarkan terbuka.
+function checkAlkerSessionExpiry() {
+  const saved = localStorage.getItem("alker_session");
+  if (!saved) return;
+  const startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+  if (startedAt && Date.now() - startedAt >= 60 * 60 * 1000) {
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+    session = null;
+    $("mainView")?.classList.add("hidden");
+    $("loginView")?.classList.remove("hidden");
+    closeModal();
+    if ($("loginMsg")) $("loginMsg").textContent = "Sesi berakhir setelah 1 jam. Silakan login kembali.";
+  }
+}
+setInterval(checkAlkerSessionExpiry, 15000);
+
+
+/*************************************************
+ * LOGIN
+ *************************************************/
+
+$("loginForm")?.addEventListener(
+  "submit",
+  async e => {
+
+    e.preventDefault();
+
+    $("loginMsg").textContent =
+      "Memproses login...";
+
+    try {
+
+      const r = await api(
+        "login",
         {
-          status: "NONAKTIF"
+          username:
+            $("username").value.trim(),
+
+          password:
+            $("password").value
         }
       );
 
-    }
+      /*
+       * BACKEND:
+       * ok -> data -> session
+       */
+      session = r.data?.session;
 
-    return;
-  }
-
-
-  /*
-   * Jika sudah ada,
-   * update datanya.
-   */
-  if(existing){
-
-    updateById_(
-      "TEKNISI",
-      "technicianId",
-      userId,
-      {
-        name: user.name,
-        username: user.username,
-        loker: user.loker,
-        status:
-          user.active === "Y"
-            ? "AKTIF"
-            : "NONAKTIF"
+      if (!session) {
+        throw new Error(
+          "Session login tidak ditemukan."
+        );
       }
-    );
 
-    return;
+      localStorage.setItem(
+        "alker_session",
+        JSON.stringify(session)
+      );
+      localStorage.setItem("alker_session_started_at", String(Date.now()));
 
-  }
+      await initApp();
 
+    } catch (err) {
 
-  /*
-   * Jika belum ada,
-   * buat mirror baru.
-   */
-  append_(
-    "TEKNISI",
-    {
-      technicianId:
-        user.userId,
-
-      name:
-        user.name,
-
-      username:
-        user.username,
-
-      loker:
-        user.loker,
-
-      phone: "",
-
-      status:
-        user.active === "Y"
-          ? "AKTIF"
-          : "NONAKTIF",
-
-      createdAt:
-        user.createdAt ||
-        now_()
+      $("loginMsg").textContent =
+        err.message;
     }
+  }
+);
+
+
+/*************************************************
+ * LOGOUT
+ *************************************************/
+
+$("logoutBtn")?.addEventListener(
+  "click",
+  () => {
+
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+
+    session = null;
+
+    $("mainView")?.classList.add(
+      "hidden"
+    );
+
+    $("loginView")?.classList.remove(
+      "hidden"
+    );
+  }
+);
+
+
+/*************************************************
+ * MOBILE
+ *************************************************/
+
+$("mobileMenu")?.addEventListener(
+  "click",
+  () => {
+    $("sidebar")?.classList.toggle(
+      "open"
+    );
+  }
+);
+
+
+/*************************************************
+ * INIT APP
+ *************************************************/
+
+async function initApp() {
+
+  if (!session) return;
+
+  const startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+  if (startedAt && Date.now() - startedAt >= 60 * 60 * 1000) {
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+    session = null;
+    $("mainView")?.classList.add("hidden");
+    $("loginView")?.classList.remove("hidden");
+    toast("Sesi berakhir setelah 1 jam. Silakan login kembali.");
+    return;
+  }
+
+  $("loginView")?.classList.add(
+    "hidden"
   );
 
-}
-function technicians_(u,scope){
-  requireRole_(u,["LEADER","SPV_GUDANG","ADMIN"]);
-  let a=rows_("TEKNISI"); if(!a.length){
-    // fallback: users ber-role teknisi
-    a=rows_("USERS").filter(x=>x.role==="TEKNISI").map(x=>({technicianId:x.userId,name:x.name,username:x.username,loker:x.loker,status:"AKTIF"}));
-  }
-  if(scope==="loker"&&u.role==="LEADER")a=a.filter(x=>x.loker===u.loker);
-  return ok_(a.map(x=>({id:x.technicianId||x.userId,name:x.name,loker:x.loker,status:x.status||"AKTIF"})));
-}
-function inventory_(u,scope){
-  let a=rows_("INVENTORY");
-  if(scope==="leaderOwn"){
-    requireRole_(u,["LEADER"]);
-    a=a.filter(x=>x.holderId===u.userId&&x.location==="LEADER");
-  }else if(scope==="mine"||u.role==="TEKNISI"){
-    a=a.filter(x=>x.holderId===u.userId);
-  }else if(scope==="loker"&&u.role==="LEADER"){
-    a=a.filter(x=>x.loker===u.loker&&x.location!=="LEADER");
-  }
-  return a;
-}
-
-/**
- * ALKER MILIK LEADER: disimpan terpisah dari inventory teknisi.
- * Harga dihitung di backend dari Master Harga, tidak menerima harga dari browser.
- */
-function leaderOwnInventoryAdd_(u,p){
-  requireRole_(u,["LEADER"]);
-  const itemId=String(p.itemId||"").trim();
-  const serialNumber=String(p.serialNumber||"").trim();
-  if(!itemId) throw new Error("ALKER wajib dipilih.");
-  if(!serialNumber) throw new Error("Serial Number wajib diisi.");
-  if(!p.photo) throw new Error("Foto ALKER wajib diunggah.");
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId||"")===itemId&&String(x.active||"Y").toUpperCase()==="Y");
-  if(!item) throw new Error("Master ALKER tidak ditemukan atau tidak aktif.");
-  const brand=String(p.brand||"").trim();
-  if(isSplicer_(item.itemName)&&!brand) throw new Error("Merek Splicer wajib dipilih.");
-  const condition=String(p.condition||"BAIK").trim().toUpperCase();
-  if(!["BAIK","RUSAK RINGAN","RUSAK BERAT"].includes(condition)) throw new Error("Kondisi ALKER tidak valid.");
-  const duplicate=rows_("INVENTORY").find(x=>String(x.itemId||"")===itemId&&String(x.serialNumber||"").trim().toLowerCase()===serialNumber.toLowerCase()&&serialNumber!=="");
-  if(duplicate) throw new Error("Serial Number tersebut sudah terdaftar di Inventory.");
-  const price=getMasterPrice_(item.itemId,brand);
-  if(!Number.isFinite(Number(price))||Number(price)<0) throw new Error("Harga Master ALKER tidak valid.");
-  const inventoryId=id_("INV");
-  append_("INVENTORY",{
-    inventoryId:inventoryId,itemId:item.itemId,itemName:item.itemName,category:item.category,
-    brand:brand,type:String(p.type||"").trim(),serialNumber:serialNumber,price:Number(price),
-    condition:condition,status:"DIPAKAI",location:"LEADER",loker:String(u.loker||"LEADER"),
-    holderId:u.userId,holder:u.name,photoUrl:savePhoto_(p.photo,"leader_own_"+inventoryId+".jpg"),
-    serialPhotoUrl:p.serialPhoto?savePhoto_(p.serialPhoto,"leader_own_serial_"+inventoryId+".jpg"):"",
-    receivedAt:now_(),source:"LEADER OWN INVENTORY",notes:String(p.note||"").trim(),updatedAt:now_()
-  });
-  audit_(u,"LEADER_OWN_ALKER_ADD",inventoryId+" | "+item.itemName+" | SN "+serialNumber+" | harga master="+price);
-  return ok_({inventoryId:inventoryId,message:"ALKER berhasil dicatat atas nama Leader."});
-}
-
-/**
- * LEADER INPUT ALKER LANGSUNG KE TEKNISI
- * Harga selalu diambil dari MASTER ALKER / MASTER ALKER PRICE.
- * Leader tidak pernah mengirim atau mengubah harga.
- */
-function leaderAddInventory_(u,p){
-  requireRole_(u,["LEADER"]);
-
-  const technicianId=String(p.technicianId||"").trim();
-  const itemId=String(p.itemId||"").trim();
-  if(!technicianId) throw new Error("Teknisi wajib dipilih.");
-  if(!itemId) throw new Error("ALKER wajib dipilih.");
-
-  const tech=rows_("TEKNISI").find(x=>String(x.technicianId||"")===technicianId);
-  const userTech=rows_("USERS").find(x=>String(x.userId||"")===technicianId && x.role==="TEKNISI");
-  const t=tech || userTech;
-  if(!t) throw new Error("Teknisi tidak ditemukan.");
-  if(String(t.loker||"")!==String(u.loker||"")) throw new Error("Teknisi bukan bagian dari loker Leader ini.");
-
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId||"")===itemId && String(x.active||"Y").toUpperCase()==="Y");
-  if(!item) throw new Error("Master ALKER tidak ditemukan atau tidak aktif.");
-
-  const brand=String(p.brand||"").trim();
-  const type=String(p.type||"").trim();
-  const serialNumber=String(p.serialNumber||"").trim();
-  const condition=String(p.condition||"BAIK").trim().toUpperCase();
-  const note=String(p.note||"").trim();
-
-  if(isSplicer_(item.itemName) && !brand) throw new Error("Merek Splicer wajib dipilih.");
-  if(!["BAIK","RUSAK RINGAN","RUSAK BERAT"].includes(condition)) throw new Error("Kondisi ALKER tidak valid.");
-  if(!serialNumber) throw new Error("Serial Number wajib diisi untuk input ALKER Leader.");
-
-  const duplicate=rows_("INVENTORY").find(x=>
-    String(x.itemId||"")===itemId &&
-    String(x.serialNumber||"").trim().toLowerCase()===serialNumber.toLowerCase() &&
-    serialNumber!==""
+  $("mainView")?.classList.remove(
+    "hidden"
   );
-  if(duplicate) throw new Error("Serial Number tersebut sudah terdaftar di Inventory.");
 
-  const masterPrice=getMasterPrice_(item.itemId,brand);
-  const inventoryId=id_("INV");
+  const name =
+    session.name || "User";
 
-  append_("INVENTORY",{
-    inventoryId:inventoryId,
-    itemId:item.itemId,
-    itemName:item.itemName,
-    category:item.category,
-    brand:brand,
-    type:type,
-    serialNumber:serialNumber,
-    price:masterPrice,
-    condition:condition,
-    status:"DIPAKAI",
-    location:"TEKNISI",
-    loker:u.loker,
-    holderId:technicianId,
-    holder:t.name,
-    photoUrl:savePhoto_(p.photo,"leader_"+inventoryId+".jpg"),
-    serialPhotoUrl:savePhoto_(p.serialPhoto,"leader_serial_"+inventoryId+".jpg"),
-    receivedAt:now_(),
-    source:"LEADER INPUT",
-    notes:note,
-    updatedAt:now_()
-  });
+  const role =
+    session.role || "ROLE";
 
-  audit_(u,"LEADER_INPUT_ALKER",inventoryId+" | "+item.itemName+" | "+t.name+" | harga master="+masterPrice);
+  const loker =
+    session.loker || "-";
 
-  return ok_({
-    inventoryId:inventoryId,
-    itemName:item.itemName,
-    technician:t.name,
-    price:masterPrice,
-    message:"ALKER berhasil ditambahkan ke teknisi dengan harga Master ALKER."
-  });
+  if ($("topUser")) {
+    $("topUser").textContent =
+      name;
+  }
+
+  if ($("topUserRole")) {
+    $("topUserRole").textContent =
+      `${role} • ${loker}`;
+  }
+
+  if ($("topUserAvatar")) {
+    $("topUserAvatar").textContent =
+      name
+        .slice(0, 1)
+        .toUpperCase();
+  }
+
+  if ($("sideName")) {
+    $("sideName").textContent =
+      name;
+  }
+
+  if ($("sideRole")) {
+    $("sideRole").textContent =
+      role;
+  }
+
+  if ($("sideLoker")) {
+    $("sideLoker").textContent =
+      loker;
+  }
+
+  if ($("avatar")) {
+    $("avatar").textContent =
+      name
+        .slice(0, 1)
+        .toUpperCase();
+  }
+
+  buildNav();
+
+  await route("dashboard");
 }
-function dashboard_(u){
+
+
+/*************************************************
+ * NAVIGATION
+ *************************************************/
+
+function buildNav() {
+
+  const r =
+    session?.role || "";
+
+  const groups = [
+    {
+      title: "UTAMA",
+      items: [
+        ["dashboard", "⌂", "Dashboard"]
+      ]
+    }
+  ];
+
 
   /*
-   * ==========================================
-   * INVENTORY SESUAI ROLE
-   * ==========================================
+   * TEKNISI
    */
+  if (r === "TEKNISI") {
 
-  let inv =
-    inventory_(
-      u,
-      u.role === "TEKNISI"
-        ? "mine"
-        : u.role === "LEADER"
-          ? "loker"
-          : "all"
+    groups.push({
+
+      title: "ALKER SAYA",
+
+      items: [
+
+        [
+          "myinventory",
+          "▣",
+          "Alker Saya"
+        ],
+
+        [
+          "initialReport",
+          "▤",
+          "Laporan Alker"
+        ],
+
+        [
+          "team",
+          "♙",
+          "Tim Saya"
+        ],
+
+        [
+          "requests",
+          "＋",
+          "Request Alker"
+        ],
+
+        [
+          "issues",
+          "!",
+          "Rusak / Hilang"
+        ],
+
+        [
+          "returns",
+          "↩",
+          "Pengembalian"
+        ]
+      ]
+    });
+  }
+
+
+  /*
+   * LEADER
+   */
+  else if (r === "LEADER") {
+
+    groups.push({
+
+      title: "TIM",
+
+      items: [
+
+        [
+          "team",
+          "♙",
+          "Teknisi Loker"
+        ],
+		[
+		  "users",
+		  "♙",
+		  "Master Teknisi"
+		],
+        [
+          "teammanage",
+          "⚙",
+          "Kelola Tim"
+        ],
+
+        [
+          "teamrequests",
+          "✓",
+          "Validasi Request"
+        ],
+
+        [
+          "teaminventory",
+          "▣",
+          "Inventory Loker"
+        ],
+        [
+          "leaderinventory",
+          "▣",
+          "ALKER Leader"
+        ],
+        [
+          "leaderissues",
+          "⚠",
+          "Laporan ALKER Teknisi"
+        ]
+      ]
+    });
+  }
+
+
+  /*
+   * SPV GUDANG
+   */
+  else if (r === "SPV_GUDANG") {
+
+    groups.push({
+
+      title: "GUDANG",
+
+      items: [
+
+        [
+          "warehouse",
+          "▦",
+          "Stok Gudang"
+        ],
+		[
+		  "masterprice",
+		  "💰",
+		  "Master Harga ALKER"
+		],
+        [
+          "initial",
+          "✓",
+          "Verifikasi Inventory"
+        ],
+
+        [
+          "requests",
+          "＋",
+          "Request Teknisi"
+        ],
+
+        [
+          "teammanage",
+          "♙",
+          "Kelola Tim"
+        ],
+
+        [
+          "receiving",
+          "↓",
+          "Barang Masuk"
+        ],
+
+        [
+          "distribution",
+          "↑",
+          "Distribusi"
+        ],
+
+        [
+          "returns",
+          "↩",
+          "Pengembalian"
+        ]
+      ]
+
+    });
+
+
+    groups.push({
+
+      title: "PENGADAAN",
+
+      items: [
+
+        [
+          "procurement",
+          "▤",
+          "Pengadaan"
+        ]
+
+      ]
+
+    });
+
+
+    groups.push({
+
+      title: "INVENTORY",
+
+      items: [
+
+        [
+          "allinventory",
+          "▣",
+          "Seluruh Inventory"
+        ]
+
+      ]
+
+    });
+  }
+
+
+  /*
+   * ADMIN
+   */
+  else if (r === "ADMIN") {
+
+  groups.push({
+
+    title: "CONTROL",
+
+    items: [
+
+      [
+        "master",
+        "⚙",
+        "Master ALKER"
+      ],
+
+      [
+        "users",
+        "♙",
+        "Master User"
+      ],
+
+      [
+        "teammanage",
+        "♙",
+        "Kelola Tim"
+      ],
+
+      [
+        "allinventory",
+        "▣",
+        "Seluruh Inventory"
+      ],
+
+      [
+        "warehouse",
+        "▦",
+        "Stok Gudang"
+      ],
+
+      [
+        "procurement",
+        "▤",
+        "Pengadaan"
+      ],
+
+      [
+        "audit",
+        "◷",
+        "Audit Trail"
+      ]
+
+    ]
+
+  });
+
+}
+
+  $("nav").innerHTML =
+    groups
+      .map(g => `
+
+        <div class="nav-group">
+
+          <div class="nav-group-title">
+            ${g.title}
+          </div>
+
+          ${g.items
+            .map(
+              x => `
+
+              <button
+                type="button"
+                class="nav-btn"
+                data-route="${x[0]}"
+              >
+
+                <span class="nav-icon">
+                  ${x[1]}
+                </span>
+
+                <span>
+                  ${x[2]}
+                </span>
+
+              </button>
+
+            `
+            )
+            .join("")}
+
+        </div>
+
+      `)
+      .join("");
+
+
+  const buttons =
+    [
+      ...document.querySelectorAll(
+        ".nav-btn"
+      )
+    ];
+
+
+  buttons.forEach(btn => {
+
+    btn.onclick = async () => {
+
+      buttons.forEach(
+        x =>
+          x.classList.remove(
+            "active"
+          )
+      );
+
+      btn.classList.add(
+        "active"
+      );
+
+      await route(
+        btn.dataset.route
+      );
+
+      $("sidebar")?.classList.remove(
+        "open"
+      );
+    };
+
+  });
+
+
+  const first =
+    buttons.find(
+      x =>
+        x.dataset.route ===
+        "dashboard"
+    );
+
+  first?.classList.add(
+    "active"
+  );
+}
+
+
+/*************************************************
+ * ROUTER
+ *************************************************/
+
+async function route(name) {
+
+  try {
+
+    if (name === "dashboard")
+      return renderDashboard();
+
+    if (name === "myinventory")
+      return renderMyInventory();
+
+    if (name === "initialReport")
+      return renderInitialReport();
+
+    if (name === "team")
+      return renderTeam();
+
+    if (name === "teammanage")
+      return renderTeamManage();
+
+    if (name === "requests")
+      return renderRequests();
+
+    if (name === "issues")
+      return renderIssues();
+
+    if (name === "returns")
+      return renderReturns();
+
+    if (name === "teamrequests")
+      return renderTeamRequests();
+
+    if (name === "teaminventory")
+      return renderTeamInventory();
+
+    if (name === "leaderinventory")
+      return renderLeaderInventory();
+
+    if (name === "leaderissues")
+      return renderLeaderIssues();
+
+    if (name === "warehouse")
+      return renderWarehouse();
+	  
+	if (name === "masterprice")
+	  return renderMasterPrice();
+
+    if (name === "initial")
+      return renderInitial();
+
+    if (name === "receiving")
+      return renderReceiving();
+
+    if (name === "distribution")
+      return renderDistribution();
+
+    if (name === "procurement")
+      return renderProcurement();
+
+    if (name === "allinventory")
+      return renderAllInventory();
+
+    if (name === "master")
+      return renderMaster();
+  
+	if(name === "users")
+		return renderUsers();
+	
+    if (name === "audit")
+      return renderAudit();
+
+	if (name === "returnVerification")
+		return renderReturnVerification();
+  
+  } catch (e) {
+
+    $("page").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat halaman
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+        <button
+          class="btn secondary"
+          onclick="route('${esc(name)}')"
+        >
+          Coba Lagi
+        </button>
+
+      </div>
+
+    `;
+  }
+}
+
+
+/*************************************************
+ * DASHBOARD
+ *************************************************/
+
+async function renderDashboard(){
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Dashboard
+        </h2>
+
+        <div class="muted">
+
+          ${esc(
+            session.loker ||
+            "Semua"
+          )}
+
+          •
+
+          ${esc(
+            session.name
+          )}
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div id="dashBody">
+
+      <div class="card">
+        Memuat dashboard...
+      </div>
+
+    </div>
+
+  `;
+
+
+  try{
+
+    const r =
+      await api(
+        "dashboard"
+      );
+
+
+    const d =
+      r.data || {};
+
+
+    /*
+     * ======================================
+     * DASHBOARD TEKNISI
+     * ======================================
+     */
+
+    if(
+      session.role ===
+      "TEKNISI"
+    ){
+
+      renderTechnicianDashboard_(
+        d
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * ======================================
+     * DASHBOARD ROLE LAIN
+     * ======================================
+     */
+
+    $("dashBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "Total Inventory",
+          d.totalInventory || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Di Gudang",
+          d.inWarehouse || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Di Teknisi",
+          d.withTechnicians || 0,
+          "unit"
+        )}
+
+        ${metric(
+          "Nilai Aset",
+          money(
+            d.totalValue || 0
+          ),
+          "inventory"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="grid two">
+
+        <div class="card">
+
+          <h3>
+            Ringkasan Kondisi
+          </h3>
+
+
+          ${
+            Object.entries(
+              d.conditions || {}
+            )
+              .map(
+                ([k,v]) => `
+
+                  <div class="kpi-line">
+
+                    <span>
+                      ${esc(k)}
+                    </span>
+
+                    <strong>
+                      ${v}
+                    </strong>
+
+                  </div>
+
+                `
+              )
+              .join("") ||
+
+            `
+              <div class="empty">
+                Belum ada data.
+              </div>
+            `
+          }
+
+        </div>
+
+
+        <div class="card">
+
+          <h3>
+            Aktivitas Menunggu
+          </h3>
+
+
+          ${
+            Object.entries(
+              d.pending || {}
+            )
+              .map(
+                ([k,v]) => `
+
+                  <div class="kpi-line">
+
+                    <span>
+                      ${esc(k)}
+                    </span>
+
+                    <strong>
+                      ${v}
+                    </strong>
+
+                  </div>
+
+                `
+              )
+              .join("") ||
+
+            `
+              <div class="empty">
+                Tidak ada aktivitas.
+              </div>
+            `
+          }
+
+        </div>
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <h3>
+          Posisi Inventory
+        </h3>
+
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+              ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? `
+                <tr><th>NAMA ALKER</th><th>JUMLAH</th><th>BAIK</th><th>RUSAK RINGAN</th><th>RUSAK BERAT</th><th>NILAI</th></tr>
+              ` : `
+                <tr><th>LOKER / LOKASI</th><th>JUMLAH</th><th>NILAI</th></tr>
+              `}
+            </thead>
+            <tbody>
+              ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? (
+                (d.inventoryDetails || []).map(x => `<tr><td><strong>${esc(x.itemName || "-")}</strong></td><td>${x.count || 0}</td><td>${x.baik || 0}</td><td>${x.rusakRingan || 0}</td><td>${x.rusakBerat || 0}</td><td>${money(x.value || 0)}</td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">Belum ada inventory.</div></td></tr>`
+              ) : (
+                (d.locations || []).map(x => `<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.value)}</td></tr>`).join("") || `<tr><td colspan="3"><div class="empty">Belum ada inventory.</div></td></tr>`
+              )}
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+  }catch(e){
+
+    $("dashBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat dashboard
+        </strong>
+
+        <p class="danger-text">
+
+          ${esc(
+            e.message
+          )}
+
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+
+/*************************************************
+ * DASHBOARD TEKNISI
+ * STATUS ALKER PER LOKER
+ *************************************************/
+
+function renderTechnicianDashboard_(
+  d
+){
+
+  const r =
+    d.technicianReport || {
+
+      total: 0,
+
+      reported: 0,
+
+      pending: 0,
+
+      revision: 0,
+
+      notGiven: 0,
+
+      notReported: 0,
+
+      items: []
+
+    };
+
+
+  $("dashBody").innerHTML = `
+
+    <!-- ==================================
+         RINGKASAN INVENTORY
+    =================================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Inventory",
+        d.totalInventory || 0,
+        "unit"
+      )}
+
+
+      ${metric(
+        "Di Gudang",
+        d.inWarehouse || 0,
+        "unit"
+      )}
+
+
+      ${metric(
+        "Di Teknisi",
+        d.withTechnicians || 0,
+        "unit"
+      )}
+
+
+      ${metric(
+        "Nilai Aset",
+        money(
+          d.totalValue || 0
+        ),
+        "inventory"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         STATUS ALKER
+    =================================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Sudah Dilaporkan",
+        r.reported,
+        "ALKER resmi"
+      )}
+
+
+      ${metric(
+        "Menunggu Verifikasi",
+        r.pending,
+        "diproses Gudang"
+      )}
+
+
+      ${metric(
+        "Perlu Revisi",
+        r.revision,
+        "perbaiki laporan"
+      )}
+
+
+      ${metric(
+        "Belum Dilaporkan",
+        r.notReported,
+        "belum ada laporan"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         STATUS PEMBERIAN
+    =================================== -->
+
+    <div class="grid two">
+
+      <div class="card">
+
+        <h3>
+          Status ALKER Saya
+        </h3>
+
+        <p class="muted">
+
+          Daftar ALKER yang berlaku
+          untuk ${esc(
+            session.loker ||
+            "-"
+          )}.
+
+        </p>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Sudah dilaporkan
+          </span>
+
+          <strong>
+            ${r.reported}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Menunggu verifikasi
+          </span>
+
+          <strong>
+            ${r.pending}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Perlu revisi
+          </span>
+
+          <strong>
+            ${r.revision}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Belum diberikan
+          </span>
+
+          <strong>
+            ${r.notGiven}
+          </strong>
+
+        </div>
+
+
+        <div class="kpi-line">
+
+          <span>
+            Belum dilaporkan
+          </span>
+
+          <strong>
+            ${r.notReported}
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <!-- ==================================
+           AKTIVITAS
+      =================================== -->
+
+      <div class="card">
+
+        <h3>
+          Aktivitas Menunggu
+        </h3>
+
+
+        ${
+          Object.entries(
+            d.pending || {}
+          )
+            .map(
+              ([k,v]) => `
+
+                <div class="kpi-line">
+
+                  <span>
+                    ${esc(k)}
+                  </span>
+
+                  <strong>
+                    ${v}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `
+            <div class="empty">
+              Tidak ada aktivitas.
+            </div>
+          `
+        }
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         DAFTAR ALKER
+    =================================== -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Daftar ALKER Loker
+          </h3>
+
+          <p class="muted">
+
+            Anda dapat langsung melihat
+            ALKER mana yang sudah dan
+            belum dilaporkan.
+
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>ALKER</th>
+
+              <th>STATUS PELAPORAN</th>
+
+              <th>KONDISI</th>
+
+              <th>INVENTORY</th>
+
+              <th>CATATAN</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              (r.items || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.category ||
+                            "-"
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        ${technicianReportBadge_(
+                          x.status
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.condition
+                            ? badge(
+                                x.condition
+                              )
+                            : `
+                              <span class="badge gray">
+                                -
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.inventoryId
+
+                            ? `
+
+                              <strong>
+                                ${esc(
+                                  x.inventoryId
+                                )}
+                              </strong>
+
+                            `
+
+                            : `
+                              <span class="muted">
+                                -
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.reviewNote
+
+                            ? esc(
+                                x.reviewNote
+                              )
+
+                            : x.status ===
+                                "BELUM DILAPORKAN"
+
+                              ? "Belum ada laporan."
+
+                              : x.status ===
+                                  "BELUM DIBERIKAN"
+
+                                ? "Belum menerima ALKER."
+
+                                : "-"
+
+                        }
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+
+                <tr>
+
+                  <td colspan="${isLeader ? 5 : 6}">
+
+                    <div class="empty">
+
+                      Belum ada daftar ALKER
+                      untuk loker ini.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         POSISI INVENTORY
+    =================================== -->
+
+    <div class="card">
+
+      <h3>
+        Posisi Inventory
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>LOKER / LOKASI</th>
+
+              <th>JUMLAH</th>
+
+              <th>NILAI</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              (d.locations || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.name
+                        )}
+                      </td>
+
+                      <td>
+                        ${x.count}
+                      </td>
+
+                      <td>
+                        ${money(
+                          x.value
+                        )}
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+                <tr>
+
+                  <td colspan="3">
+
+                    <div class="empty">
+                      Belum ada inventory.
+                    </div>
+
+                  </td>
+
+                </tr>
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/*************************************************
+ * BADGE STATUS ALKER TEKNISI
+ *************************************************/
+
+function technicianReportBadge_(
+  status
+){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "SUDAH DILAPORKAN"
+  ){
+
+    return `
+      <span class="badge green">
+        SUDAH DILAPORKAN
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "PERLU REVISI"
+  ){
+
+    return `
+      <span class="badge red">
+        PERLU REVISI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "BELUM DIBERIKAN"
+  ){
+
+    return `
+      <span class="badge blue">
+        BELUM DIBERIKAN
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge gray">
+      BELUM DILAPORKAN
+    </span>
+  `;
+
+}
+
+function metric(a, b, c) {
+
+  return `
+
+    <div class="card metric">
+
+      <div class="label">
+        ${esc(a)}
+      </div>
+
+      <div class="value">
+        ${b}
+      </div>
+
+      <div class="sub">
+        ${esc(c)}
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * ALKER SAYA
+ * INVENTORY + PENGAJUAN AWAL
+ *************************************************/
+
+async function renderMyInventory(){
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Alker Saya
+        </h2>
+
+        <p class="muted">
+          Semua ALKER yang Anda laporkan
+          maupun yang sudah resmi menjadi
+          tanggung jawab Anda.
+        </p>
+
+      </div>
+
+      <div class="actions">
+
+        <button
+          class="btn primary"
+          onclick="showInitialForm()"
+        >
+          + Input Alker Awal
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div id="myInv">
+
+      Memuat...
+
+    </div>
+
+  `;
+
+
+  try{
+
+    const [
+      inv,
+      initial
+    ] =
+      await Promise.all([
+
+        api(
+          "inventory",
+          {
+            scope:"mine"
+          }
+        ),
+
+        api(
+          "initialMine"
+        )
+
+      ]);
+
+
+    renderMyInventoryPage(
+
+      $("myInv"),
+
+      inv.data || [],
+
+      initial.data || []
+
     );
 
 
-  /*
-   * ==========================================
-   * RINGKASAN INVENTORY
-   * ==========================================
-   */
+  }catch(e){
+
+    $("myInv").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat Alker
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+function renderMyInventoryPage(
+  el,
+  inventory,
+  initial
+){
+
+  const pending =
+    initial.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
+    );
+
+
+  const revision =
+    initial.filter(
+      x =>
+        x.status ===
+        "REVISI"
+    );
+
+
+  const approved =
+    initial.filter(
+      x =>
+        x.status ===
+        "APPROVED"
+    );
+
+
+  const problems =
+    inventory.filter(
+      x =>
+        /RUSAK|HILANG/i.test(
+          x.condition || ""
+        )
+    );
+
 
   const totalValue =
-    inv.reduce(
-      (s,x) =>
-        s + Number(x.price || 0),
+    inventory.reduce(
+      (sum,x) =>
+        sum +
+        Number(x.price || 0),
       0
     );
 
 
-  const cond = {};
+  el.innerHTML = `
 
-  inv.forEach(
-    x => {
+    <!-- RINGKASAN -->
 
-      const key =
-        x.condition ||
-        "BELUM DIKETAHUI";
+    <div class="card">
 
-      cond[key] =
-        (cond[key] || 0) + 1;
+      <div class="detail-grid">
 
-    }
-  );
 
+        <div class="detail-box">
 
-  const loc = {};
+          <span>
+            Inventory Resmi
+          </span>
 
-  inv.forEach(
-    x => {
+          <strong>
+            ${inventory.length}
+          </strong>
 
-      const key =
-        x.location ||
-        "UNKNOWN";
+        </div>
 
 
-      if(!loc[key]){
+        <div class="detail-box">
 
-        loc[key] = {
+          <span>
+            Menunggu Verifikasi
+          </span>
 
-          name:
-            key,
+          <strong>
+            ${pending.length}
+          </strong>
 
-          count:
-            0,
+        </div>
 
-          value:
-            0
 
-        };
+        <div class="detail-box">
 
-      }
+          <span>
+            Perlu Revisi
+          </span>
 
+          <strong>
+            ${revision.length}
+          </strong>
 
-      loc[key].count++;
+        </div>
 
-      loc[key].value +=
-        Number(
-          x.price || 0
-        );
 
-    }
-  );
+        <div class="detail-box">
 
+          <span>
+            Nilai Inventory
+          </span>
 
-  /*
-   * ==========================================
-   * DATA AKTIVITAS
-   * ==========================================
-   */
+          <strong>
+            ${money(totalValue)}
+          </strong>
 
-  const req =
-    rows_("REQUESTS");
+        </div>
 
-  const ini =
-    rows_("INITIAL_INVENTORY");
 
-  const pro =
-    rows_("PROCUREMENT");
+      </div>
 
+    </div>
 
-  const filter =
-    a => {
 
-      if(
-        u.role ===
-        "TEKNISI"
-      ){
+    <div style="height:15px"></div>
 
-        return a.filter(
-          x =>
-            x.technicianId ===
-            u.userId
-        );
 
-      }
+    <!-- PENGAJUAN ALKER AWAL -->
 
+    <div class="card">
 
-      if(
-        u.role ===
-        "LEADER"
-      ){
+      <div class="section-head">
 
-        return a.filter(
-          x =>
-            x.loker ===
-            u.loker
-        );
+        <div>
 
-      }
+          <h3>
+            Pengajuan Alker Awal
+          </h3>
 
+          <p class="muted">
+            Status ALKER yang Anda laporkan
+            kepada Gudang.
+          </p>
 
-      return a;
+        </div>
 
-    };
+      </div>
 
 
-  /*
-   * ==========================================
-   * KHUSUS TEKNISI
-   *
-   * Bandingkan:
-   *
-   * MASTER ALKER LOKER
-   * VS
-   * INVENTORY TEKNISI
-   * VS
-   * INITIAL_INVENTORY
-   * ==========================================
-   */
+      <div class="table-wrap">
 
-  let technicianReport = null;
+        <table class="table">
 
+          <thead>
 
-  if(
-    u.role ===
-    "TEKNISI"
-  ){
+            <tr>
 
-    const allowed =
-      getAllowedLokerItems_(
-        u.loker
-      );
+              <th>ALKER</th>
 
+              <th>Merk / Type</th>
 
-    const myInitial =
-      ini.filter(
-        x =>
-          x.technicianId ===
-          u.userId
-      );
+              <th>SN</th>
 
+              <th>Kondisi</th>
 
-    /*
-     * Ambil pengajuan TERAKHIR
-     * untuk setiap item.
-     *
-     * Supaya pengajuan lama
-     * tidak mengacaukan status.
-     */
+              <th>Tanggal</th>
 
-    const latestInitial = {};
+              <th>Status</th>
 
+              <th>Keterangan</th>
 
-    myInitial.forEach(
-      x => {
+            </tr>
 
-        const old =
-          latestInitial[
-            x.itemId
-          ];
+          </thead>
 
 
-        if(
-          !old ||
-          String(
-            x.date || ""
-          ) >
-          String(
-            old.date || ""
-          )
-        ){
+          <tbody>
 
-          latestInitial[
-            x.itemId
-          ] = x;
-
-        }
-
-      }
-    );
-
-
-    const rows =
-      allowed.map(
-        item => {
-
-          const itemInv =
-            inv.find(
-              x =>
-                x.itemId ===
-                item.itemId
-            );
-
-
-          const initial =
-            latestInitial[
-              item.itemId
-            ];
-
-
-          let status =
-            "BELUM DILAPORKAN";
-
-
-          let statusKey =
-            "BELUM";
-
-
-          /*
-           * 1. Sudah menjadi inventory resmi
-           */
-
-          if(itemInv){
-
-            status =
-              "SUDAH DILAPORKAN";
-
-            statusKey =
-              "SUDAH";
-
-          }
-
-
-          /*
-           * 2. Sedang revisi
-           */
-
-          else if(
-            initial &&
-            String(
-              initial.status || ""
-            ).toUpperCase() ===
-              "REVISI"
-          ){
-
-            status =
-              "PERLU REVISI";
-
-            statusKey =
-              "REVISI";
-
-          }
-
-
-          /*
-           * 3. Belum diberikan
-           */
-
-          else if(
-            initial &&
-            String(
-              initial.givenStatus || ""
-            ).toUpperCase() ===
-              "BELUM DIBERIKAN"
-          ){
-
-            status =
-              "BELUM DIBERIKAN";
-
-            statusKey =
-              "PENGADAAN";
-
-          }
-
-
-          /*
-           * 4. Menunggu verifikasi
-           */
-
-          else if(
-            initial &&
-            String(
-              initial.status || ""
-            ).toUpperCase() ===
-              "MENUNGGU VERIFIKASI"
-          ){
-
-            status =
-              "MENUNGGU VERIFIKASI";
-
-            statusKey =
-              "MENUNGGU";
-
-          }
-
-
-          return {
-
-            itemId:
-              item.itemId,
-
-            itemName:
-              item.itemName,
-
-            category:
-              item.category || "",
-
-            status:
-              status,
-
-            statusKey:
-              statusKey,
-
-            inventoryId:
-              itemInv
-                ? itemInv.inventoryId
-                : "",
-
-            condition:
-              itemInv
-                ? itemInv.condition
-                : "",
-
-            price:
-              itemInv
-                ? Number(
-                    itemInv.price || 0
-                  )
-                : 0,
-
-            initialId:
+            ${
               initial
-                ? initial.initialId
-                : "",
+                .map(
+                  x => `
 
-            givenStatus:
-              initial
-                ? initial.givenStatus || ""
-                : "",
+                    <tr>
 
-            reviewNote:
-              initial
-                ? initial.reviewNote || ""
-                : ""
+                      <td>
 
-          };
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
 
-        }
-      );
+                        <div
+                          class="small muted"
+                        >
+                          ${esc(
+                            x.initialId
+                          )}
+                        </div>
+
+                      </td>
 
 
-    technicianReport = {
+                      <td>
 
-      total:
-        rows.length,
+                        ${esc(
+                          x.brand || "-"
+                        )}
 
-      reported:
-        rows.filter(
-          x =>
-            x.statusKey ===
-            "SUDAH"
-        ).length,
+                        /
 
-      pending:
-        rows.filter(
-          x =>
-            x.statusKey ===
-            "MENUNGGU"
-        ).length,
+                        ${esc(
+                          x.type || "-"
+                        )}
 
-      revision:
-        rows.filter(
-          x =>
-            x.statusKey ===
-            "REVISI"
-        ).length,
+                      </td>
 
-      notGiven:
-        rows.filter(
-          x =>
-            x.statusKey ===
-            "PENGADAAN"
-        ).length,
 
-      notReported:
-        rows.filter(
-          x =>
-            x.statusKey ===
-            "BELUM"
-        ).length,
+                      <td>
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+                      </td>
 
-      items:
-        rows
 
-    };
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
 
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${initialStatusBadge(
+                          x.status
+                        )}
+                      </td>
+
+
+                     <td>
+
+  ${
+    x.status === "REVISI"
+
+      ? `
+
+        <div class="small danger-text"
+             style="margin-bottom:8px">
+
+          ${esc(
+            x.reviewNote ||
+            "Mohon perbaiki data."
+          )}
+
+        </div>
+
+        <button
+          class="btn warning"
+          onclick='showInitialRevisionForm(${JSON.stringify(x)})'
+        >
+          Perbaiki & Upload Ulang
+        </button>
+
+      `
+
+      : x.status === "APPROVED"
+
+        ? `
+
+          <span
+            class="small muted"
+          >
+            Sudah menjadi
+            inventory resmi.
+          </span>
+
+        `
+
+        : `
+
+          <span
+            class="small muted"
+          >
+            Menunggu pemeriksaan
+            Gudang.
+          </span>
+
+        `
   }
 
+</td>
 
-  /*
-   * ==========================================
-   * RETURN DASHBOARD
-   * ==========================================
-   */
+                    </tr>
 
-  return {
-
-    totalInventory:
-      inv.length,
-
-    inWarehouse:
-      inv.filter(
-        x =>
-          x.location ===
-          "GUDANG"
-      ).length,
-
-    withTechnicians:
-      inv.filter(
-        x =>
-          x.location ===
-          "TEKNISI"
-      ).length,
-
-    totalValue:
-      totalValue,
-
-    conditions:
-      cond,
-
-    locations:
-      Object.values(
-        loc
-      ),
-
-    inventoryDetails: (() => {
-      // Ringkasan Gudang per nama ALKER, tanpa memecah berdasarkan teknisi/loker.
-      const grouped = {};
-      inv.forEach(x => {
-        const name = String(x.itemName || "-").trim() || "-";
-        const key = name.toUpperCase();
-        const condition = String(x.condition || "").trim().toUpperCase();
-        if (!grouped[key]) grouped[key] = {itemName:name,count:0,baik:0,rusakRingan:0,rusakBerat:0,value:0};
-        grouped[key].count += 1;
-        if (condition === "BAIK") grouped[key].baik += 1;
-        else if (condition === "RUSAK RINGAN") grouped[key].rusakRingan += 1;
-        else if (condition === "RUSAK BERAT") grouped[key].rusakBerat += 1;
-        grouped[key].value += Number(x.price || 0);
-      });
-      return Object.values(grouped).sort((a,b)=>String(a.itemName).localeCompare(String(b.itemName),"id"));
-    })(),
-
-    pending: {
-
-      "Inventory awal menunggu":
-        filter(ini)
-          .filter(
-            x =>
-              x.status ===
-              "MENUNGGU VERIFIKASI"
-          )
-          .length,
-
-      "Request menunggu":
-        filter(req)
-          .filter(
-            x =>
-              /MENUNGGU/
-                .test(
-                  x.status
+                  `
                 )
-          )
-          .length,
+                .join("")
 
-      "Pengadaan aktif":
-        pro.filter(
-          x =>
-            !/SELESAI|DITOLAK/
-              .test(
-                x.status
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="7">
+
+                    <div class="empty">
+
+                      Belum ada pengajuan
+                      ALKER awal.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- INVENTORY RESMI -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Inventory Resmi
+          </h3>
+
+          <p class="muted">
+            ALKER yang sudah disetujui
+            Gudang dan menjadi tanggung
+            jawab Anda.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      ${
+        inventory.length
+
+          ? renderInventorySimpleTable(
+              inventory
+            )
+
+          : `
+
+            <div class="empty">
+
+              Belum ada ALKER yang
+              disetujui Gudang.
+
+            </div>
+
+          `
+      }
+
+    </div>
+
+  `;
+
+}
+function renderInventoryTable(
+  el,
+  data,
+  scope
+) {
+
+  const total =
+    data.reduce(
+      (a, x) =>
+        a + Number(x.price || 0),
+      0
+    );
+
+
+  const problems =
+    data.filter(
+      x =>
+        /RUSAK|HILANG/i.test(
+          x.condition || ""
+        )
+    ).length;
+
+
+  el.innerHTML = `
+
+    <div
+      class="card"
+      style="margin-bottom:15px"
+    >
+
+      <div class="detail-grid">
+
+        <div class="detail-box">
+
+          <span>
+            Item
+          </span>
+
+          <strong>
+            ${data.length}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Nilai
+          </span>
+
+          <strong>
+            ${money(total)}
+          </strong>
+
+        </div>
+
+
+        <div class="detail-box">
+
+          <span>
+            Masalah
+          </span>
+
+          <strong>
+            ${problems}
+          </strong>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ID</th>
+            <th>Alker</th>
+            <th>Merk / Type</th>
+            <th>SN</th>
+            <th>Lokasi</th>
+            <th>Pemegang</th>
+            <th>Kondisi</th>
+            <th>Nilai</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            data
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ${esc(x.itemName)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${esc(x.brand || "-")}
+                      /
+                      ${esc(x.type || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.serialNumber || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.location || "-")}
+                    </td>
+
+                    <td>
+                      ${esc(x.holder || "-")}
+                    </td>
+
+                    <td>
+                      ${badge(x.condition)}
+                    </td>
+
+                    <td>
+                      ${money(x.price)}
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn secondary"
+                        onclick='showInventoryDetail(${JSON.stringify(x)})'
+                      >
+                        Detail
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
               )
-        ).length
+              .join("") ||
 
-    },
+            `<tr>
 
-    technicianReport:
-      technicianReport
+              <td colspan="9">
 
-  };
+                <div class="empty">
+                  Belum ada inventory.
+                </div>
 
-}
-/*************************************************
- * INPUT ALKER AWAL - TEKNISI
- *
- * Harga/Nilai TIDAK BOLEH diinput teknisi.
- * Nilai akan ditentukan Gudang saat verifikasi.
- *************************************************/
-/*************************************************
- * ALKER AWAL TEKNISI
- * STATUS / RIWAYAT PENGAJUAN
- *************************************************/
+              </td>
 
-/*************************************************
- * ALKER AWAL TEKNISI
- * STATUS / RIWAYAT PENGAJUAN
- *************************************************/
+            </tr>`
+          }
 
-function leaderInitialReports_(u){
-  requireRole_(u,["LEADER"]);
+        </tbody>
 
-  // Daftar teknisi diambil dari penugasan Leader, bukan dari loker Leader.
-  // Loker Leader biasanya bernama LEADER, sedangkan teknisi ada di loker operasional.
-  const assigned = rows_("USERS").filter(x =>
-    String(x.role || "").toUpperCase() === "TEKNISI" &&
-    String(x.active || "").toUpperCase() === "Y" &&
-    String(x.leaderId || "") === String(u.userId || "")
-  );
+      </table>
 
-  const assignedIds = new Set(assigned.map(x => String(x.userId || "")));
-  const reports = rows_("INITIAL_INVENTORY").filter(x =>
-    assignedIds.has(String(x.technicianId || ""))
-  );
+    </div>
 
-  const submittedIds = new Set(reports.map(x => String(x.technicianId || "")));
-  const notSubmitted = assigned
-    .filter(x => !submittedIds.has(String(x.userId || "")))
-    .map(x => ({
-      initialId: "",
-      technicianId: x.userId || "",
-      technician: x.name || x.username || "-",
-      loker: x.loker || "-",
-      date: "",
-      itemName: "-",
-      brand: "",
-      type: "",
-      serialNumber: "",
-      condition: "-",
-      status: "BELUM INPUT ALKER",
-      price: 0,
-      reviewNote: "Teknisi belum mengirim laporan ALKER awal."
-    }));
-
-  const submitted = reports.map(x => ({...x, inputStatus: "SUDAH INPUT ALKER"}));
-  return submitted.concat(notSubmitted).sort((a,b) => {
-    const aName = String(a.technician || "");
-    const bName = String(b.technician || "");
-    if (a.inputStatus !== b.inputStatus) return a.inputStatus === "SUDAH INPUT ALKER" ? -1 : 1;
-    return aName.localeCompare(bName);
-  });
-}
-
-function initialMine_(u){
-
-  requireRole_(
-    u,
-    ["TEKNISI"]
-  );
-
-  return rows_("INITIAL_INVENTORY")
-    .filter(x =>
-      x.technicianId === u.userId
-    )
-    .reverse();
+  `;
 }
 
 
 /*************************************************
- * SUBMIT ALKER AWAL
- *
- * givenStatus:
- *
- * SUDAH DIBERIKAN
- *   -> wajib data fisik ALKER
- *
- * BELUM DIBERIKAN
- *   -> tidak perlu data fisik
- *   -> akan masuk proses pengadaan
+ * INVENTORY DETAIL
  *************************************************/
 
-function initialSubmit_(u,p){
-
-  requireRole_(
-    u,
-    ["TEKNISI"]
-  );
-
-
-  const itemId =
-    String(
-      p.itemId || ""
-    ).trim();
-
-
-  const givenStatus =
-    String(
-      p.givenStatus ||
-      ""
-    ).trim()
-    .toUpperCase();
-
-
-  if(
-    ![
-      "SUDAH DIBERIKAN",
-      "BELUM DIBERIKAN"
-    ].includes(givenStatus)
-  ){
-
-    throw new Error(
-      "Status pemberian ALKER wajib dipilih."
-    );
-
-  }
-
-
-  const item =
-    getAllowedLokerItems_(
-      u.loker
-    ).find(
-      x =>
-        x.itemId === itemId
-    );
-
-
-  if(!item){
-
-    throw new Error(
-      "ALKER tidak tersedia untuk loker Anda."
-    );
-
-  }
-
-
-  /*
-   * Jangan izinkan pengajuan aktif
-   * yang sama.
-   */
-
-  const existing =
-    rows_("INITIAL_INVENTORY")
-      .find(
-        x =>
-          x.technicianId === u.userId &&
-          x.itemId === item.itemId &&
-          (
-            x.status ===
-              "MENUNGGU VERIFIKASI" ||
-
-            x.status ===
-              "REVISI"
-          )
-      );
-
-
-  if(existing){
-
-    throw new Error(
-      "ALKER ini sudah memiliki pengajuan aktif."
-    );
-
-  }
-
-
-  /*
-   * DATA FISIK
-   */
-
-  let brand = "";
-  let type = "";
-  let serialNumber = "";
-  let condition = "BELUM DIVERIFIKASI";
-  let photoUrl = "";
-  let serialPhotoUrl = "";
-
-
-  if(
-    givenStatus ===
-    "SUDAH DIBERIKAN"
-  ){
-
-    brand =
-      String(
-        p.brand || ""
-      ).trim();
-
-    type =
-      String(
-        p.type || ""
-      ).trim();
-
-    serialNumber =
-      String(
-        p.serialNumber || ""
-      ).trim();
-
-    condition =
-      String(
-        p.condition ||
-        "BAIK"
-      ).trim();
-
-
-    /*
-     * Untuk ALKER yang sudah diberikan,
-     * foto disimpan.
-     */
-
-    const alkerFolder =
-      getAlkerFolder_(
-        item.itemName
-      );
-
-
-    const technicianFolder =
-      getTechnicianFolder_(
-        alkerFolder,
-        u.name,
-        serialNumber
-      );
-
-
-    const timestamp =
-      Date.now();
-
-
-    photoUrl =
-      savePhoto_(
-        p.photo,
-        "FOTO_ALKER_" +
-          timestamp +
-          ".jpg",
-        technicianFolder
-      );
-
-
-    serialPhotoUrl =
-      savePhoto_(
-        p.serialPhoto,
-        "FOTO_SERIAL_" +
-          timestamp +
-          ".jpg",
-        technicianFolder
-      );
-
-  }
-
-
-  /*
-   * KETERANGAN
-   */
-
-  const note =
-    String(
-      p.note || ""
-    ).trim();
-
-
-  /*
-   * DATA PENGAJUAN
-   */
-
-  const x = {
-
-    initialId:
-      id_("INI"),
-
-    itemId:
-      item.itemId,
-
-    itemName:
-      item.itemName,
-
-    technicianId:
-      u.userId,
-
-    technician:
-      u.name,
-
-    loker:
-      u.loker,
-
-    brand:
-      brand,
-
-    type:
-      type,
-
-    serialNumber:
-      serialNumber,
-
-    condition:
-      condition,
-
-    /*
-     * Harga TIDAK berasal dari teknisi.
-     */
-    price:
-      0,
-
-    photoUrl:
-      photoUrl,
-
-    serialPhotoUrl:
-      serialPhotoUrl,
-
-    note:
-      note,
-
-    status:
-      "MENUNGGU VERIFIKASI",
-
-    date:
-      now_(),
-
-    reviewNote:
-      "",
-
-    givenStatus:
-      givenStatus
-
-  };
-
-
-  append_(
-    "INITIAL_INVENTORY",
-    x
-  );
-
-
-  audit_(
-    u,
-    "INITIAL_SUBMIT",
-    x.itemName +
-      " / " +
-      givenStatus +
-      " / " +
-      u.name
-  );
-
-
-  return ok_({
-
-    initialId:
-      x.initialId,
-
-    message:
-      "ALKER berhasil dikirim ke Gudang untuk verifikasi."
-
-  });
-
-}
-
-
-/*************************************************
- * RESUBMIT REVISI
- *************************************************/
-
-function initialResubmit_(u,p){
-
-  requireRole_(
-    u,
-    ["TEKNISI"]
-  );
-
-
-  const initialId =
-    String(
-      p.initialId || ""
-    ).trim();
-
-
-  if(!initialId){
-
-    throw new Error(
-      "ID pengajuan tidak ditemukan."
-    );
-
-  }
-
-
-  const existing =
-    rows_("INITIAL_INVENTORY")
-      .find(
-        x =>
-          x.initialId === initialId
-      );
-
-
-  if(!existing){
-
-    throw new Error(
-      "Pengajuan ALKER tidak ditemukan."
-    );
-
-  }
-
-
-  if(
-    existing.technicianId !==
-    u.userId
-  ){
-
-    throw new Error(
-      "Anda tidak memiliki akses ke pengajuan ini."
-    );
-
-  }
-
-
-  if(
-    String(
-      existing.status
-    ).toUpperCase() !==
-      "REVISI"
-  ){
-
-    throw new Error(
-      "ALKER ini tidak sedang dalam status REVISI."
-    );
-
-  }
-
-
-  const givenStatus =
-    String(
-      p.givenStatus ||
-      existing.givenStatus ||
-      ""
-    ).trim()
-    .toUpperCase();
-
-
-  if(
-    ![
-      "SUDAH DIBERIKAN",
-      "BELUM DIBERIKAN"
-    ].includes(givenStatus)
-  ){
-
-    throw new Error(
-      "Status pemberian ALKER tidak valid."
-    );
-
-  }
-
-
-  const item =
-    getAllowedLokerItems_(
-      u.loker
-    ).find(
-      x =>
-        x.itemId ===
-        existing.itemId
-    );
-
-
-  if(!item){
-
-    throw new Error(
-      "ALKER tidak tersedia untuk loker Anda."
-    );
-
-  }
-
-
-  let brand = "";
-  let type = "";
-  let serialNumber = "";
-  let condition = "BELUM DIVERIFIKASI";
-
-  let photoUrl =
-    existing.photoUrl || "";
-
-  let serialPhotoUrl =
-    existing.serialPhotoUrl || "";
-
-
-  if(
-    givenStatus ===
-    "SUDAH DIBERIKAN"
-  ){
-
-    brand =
-      String(
-        p.brand || ""
-      ).trim();
-
-    type =
-      String(
-        p.type || ""
-      ).trim();
-
-    serialNumber =
-      String(
-        p.serialNumber || ""
-      ).trim();
-
-    condition =
-      String(
-        p.condition ||
-        "BAIK"
-      ).trim();
-
-
-    const alkerFolder =
-      getAlkerFolder_(
-        item.itemName
-      );
-
-
-    const technicianFolder =
-      getTechnicianFolder_(
-        alkerFolder,
-        u.name,
-        serialNumber
-      );
-
-
-    const timestamp =
-      Date.now();
-
-
-    if(p.photo){
-
-      photoUrl =
-        savePhoto_(
-          p.photo,
-          "FOTO_ALKER_REVISI_" +
-            timestamp +
-            ".jpg",
-          technicianFolder
-        );
-
-    }
-
-
-    if(p.serialPhoto){
-
-      serialPhotoUrl =
-        savePhoto_(
-          p.serialPhoto,
-          "FOTO_SERIAL_REVISI_" +
-            timestamp +
-            ".jpg",
-          technicianFolder
-        );
-
-    }
-
-  }
-
-
-  updateById_(
-    "INITIAL_INVENTORY",
-    "initialId",
-    initialId,
-    {
-
-      brand:
-        brand,
-
-      type:
-        type,
-
-      serialNumber:
-        serialNumber,
-
-      condition:
-        condition,
-
-      price:
-        0,
-
-      photoUrl:
-        photoUrl,
-
-      serialPhotoUrl:
-        serialPhotoUrl,
-
-      note:
-        String(
-          p.note || ""
-        ).trim(),
-
-      givenStatus:
-        givenStatus,
-
-      status:
-        "MENUNGGU VERIFIKASI",
-
-      date:
-        now_(),
-
-      reviewNote:
-        ""
-
-    }
-  );
-
-
-  audit_(
-    u,
-    "INITIAL_RESUBMIT",
-    initialId +
-      " / " +
-      givenStatus
-  );
-
-
-  return ok_({
-
-    initialId:
-      initialId,
-
-    message:
-      "Perbaikan ALKER berhasil dikirim kembali ke Gudang."
-
-  });
-
-}
-
-
-/*************************************************
- * KEPUTUSAN GUDANG
- *************************************************/
-
-function initialDecision_(u,p){
-
-  requireRole_(
-    u,
-    ["SPV_GUDANG","ADMIN"]
-  );
-
-
-  const initialId =
-    String(
-      p.initialId || ""
-    ).trim();
-
-
-  const a =
-    rows_("INITIAL_INVENTORY")
-      .find(
-        x =>
-          x.initialId ===
-          initialId
-      );
-
-
-  if(!a){
-
-    throw new Error(
-      "Data ALKER tidak ditemukan."
-    );
-
-  }
-
-
-  if(
-    a.status !==
-      "MENUNGGU VERIFIKASI"
-  ){
-
-    throw new Error(
-      "Data ini sudah diproses."
-    );
-
-  }
-
-
-  const decision =
-    String(
-      p.decision || ""
-    ).trim()
-    .toUpperCase();
-
-
-  const givenStatus =
-    String(
-      a.givenStatus ||
-      "BELUM DIBERIKAN"
-    ).trim()
-    .toUpperCase();
-
-
-  /*
-   * =========================================
-   * REVISI
-   * =========================================
-   */
-
-  if(
-    decision ===
-    "REVISION"
-  ){
-
-    const note =
-      String(
-        p.note ||
-        "Mohon perbaiki data ALKER."
-      ).trim();
-
-
-    updateById_(
-      "INITIAL_INVENTORY",
-      "initialId",
-      initialId,
-      {
-
-        status:
-          "REVISI",
-
-        reviewNote:
-          note
-
-      }
-    );
-
-
-    audit_(
-      u,
-      "INITIAL_REVISION",
-      initialId +
-        " / " +
-        note
-    );
-
-
-    return ok_({
-
-      message:
-        "ALKER dikembalikan kepada teknisi untuk diperbaiki."
-
-    });
-
-  }
-
-
-  /*
-   * =========================================
-   * APPROVE
-   * =========================================
-   */
-
-  if(
-    decision !==
-    "APPROVE"
-  ){
-
-    throw new Error(
-      "Keputusan verifikasi tidak valid."
-    );
-
-  }
-
-
-  /*
-   * =========================================
-   * BELUM DIBERIKAN
-   * =========================================
-   *
-   * Jangan buat INVENTORY.
-   *
-   * Buat REQUEST PROCUREMENT.
-   */
-
-  if(
-    givenStatus ===
-    "BELUM DIBERIKAN"
-  ){
-
-    /*
-     * Cegah procurement ganda.
-     */
-
-    const existingPO =
-      rows_("PROCUREMENT")
-        .find(
-          x =>
-            String(
-              x.requestId || ""
-            ) === initialId
-        );
-
-
-    let procurementId = "";
-
-
-    if(existingPO){
-
-      procurementId =
-        existingPO.procurementId;
-
-    }else{
-
-      procurementId =
-        id_("PO");
-
-
-      append_(
-        "PROCUREMENT",
-        {
-
-          procurementId:
-            procurementId,
-
-          itemId:
-            a.itemId,
-
-          itemName:
-            a.itemName,
-
-          qty:
-            1,
-
-          estimate:
-            0,
-
-          priority:
-            "NORMAL",
-
-          reason:
-            "ALKER belum diberikan kepada teknisi " +
-            a.technician,
-
-          status:
-            "MENUNGGU PROSES PENGADAAN",
-
-          requestId:
-            initialId,
-
-          date:
-            now_(),
-
-          updatedAt:
-            now_(),
-
-          actor:
-            u.name
-
+window.showInventoryDetail =
+  async x => {
+
+    openModal(
+
+      "Detail Inventory",
+
+      `
+
+        <div class="detail-grid">
+
+          ${[
+            ["ID",x.inventoryId],
+            ["Alker",x.itemName],
+            ["Kategori",x.category],
+            ["Merk",x.brand],
+            ["Type",x.type],
+            ["Serial Number",x.serialNumber],
+            ["Lokasi",x.location],
+            ["Pemegang",x.holder],
+            ["Loker",x.loker],
+            ["Kondisi",x.condition],
+            ["Status",x.status],
+            ["Nilai",money(x.price)],
+            ["Keterangan Tambahan",x.notes || x.note || "-"]
+          ]
+            .map(
+              a => `
+
+                <div class="detail-box" ${a[0] === "Keterangan Tambahan" ? 'style="grid-column:1/-1;white-space:pre-wrap;overflow-wrap:anywhere"' : ""}>
+
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong style="white-space:pre-wrap;overflow-wrap:anywhere">
+                    ${esc(
+                      a[1] || "-"
+                    )}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        <div
+          id="inventoryPhotoArea"
+          style="margin-top:18px"
+        >
+
+          <div class="empty">
+            Memuat foto...
+          </div>
+
+        </div>
+
+
+        ${
+          session.role ===
+          "TEKNISI"
+            ? `
+
+              <div
+                class="actions"
+                style="margin-top:15px"
+              >
+
+                <button
+                  class="btn warning"
+                  onclick="
+                    closeModal();
+                    showIssueForm(
+                      '${esc(x.inventoryId)}'
+                    )
+                  "
+                >
+                  Lapor Rusak / Hilang
+                </button>
+
+              </div>
+
+            `
+            : ""
         }
-      );
 
-    }
+      `
 
-
-    updateById_(
-      "INITIAL_INVENTORY",
-      "initialId",
-      initialId,
-      {
-
-        status:
-          "PENGADAAN",
-
-        givenStatus:
-          "BELUM DIBERIKAN",
-
-        reviewNote:
-          "Diverifikasi Gudang. " +
-          "Diteruskan ke proses pengadaan. " +
-          "PO: " +
-          procurementId
-
-      }
     );
 
 
-    audit_(
-      u,
-      "INITIAL_PROCUREMENT",
-      initialId +
-        " -> " +
-        procurementId
-    );
+    const photos = [];
 
 
-    return ok_({
-
-      message:
-        "ALKER belum diberikan. Data diteruskan ke proses pengadaan.",
-
-      procurementId:
-        procurementId
-
-    });
-
-  }
-
-
-  /*
-   * =========================================
-   * SUDAH DIBERIKAN
-   * =========================================
-   *
-   * Baru dibuat sebagai INVENTORY teknisi.
-   */
-
-  if(
-    givenStatus !==
-    "SUDAH DIBERIKAN"
-  ){
-
-    throw new Error(
-      "Status pemberian ALKER tidak valid."
-    );
-
-  }
-
-
-  const master =
-    rows_("MASTER_ALKER")
-      .find(
-        x =>
-          x.itemId ===
-          a.itemId
-      );
-
-
-  const inv = {
-
-    inventoryId:
-      id_("INV"),
-
-    itemId:
-      a.itemId,
-
-    itemName:
-      a.itemName,
-
-    category:
-      master?.category ||
-      "",
-
-    brand:
-      a.brand,
-
-    type:
-      a.type,
-
-    serialNumber:
-      a.serialNumber,
-
-    /*
-     * Harga ditentukan Gudang.
-     * Untuk sementara menggunakan harga master.
-     */
-
-    price:
-      getMasterPrice_(
-        a.itemId,
-        a.brand
-      ),
-
-    condition:
-      a.condition ||
-      "BAIK",
-
-    status:
-      "DIPAKAI",
-
-    location:
-      "TEKNISI",
-
-    loker:
-      a.loker,
-
-    holderId:
-      a.technicianId,
-
-    holder:
-      a.technician,
-
-    photoUrl:
-      a.photoUrl,
-
-    serialPhotoUrl:
-      a.serialPhotoUrl,
-
-    receivedAt:
-      a.date,
-
-    source:
-      "INVENTORY AWAL",
-
-    notes:
-      a.note,
-
-    updatedAt:
-      now_()
-
-  };
-
-
-  append_(
-    "INVENTORY",
-    inv
-  );
-
-
-  updateById_(
-    "INITIAL_INVENTORY",
-    "initialId",
-    initialId,
-    {
-
-      status:
-        "APPROVED",
-
-      givenStatus:
-        "SUDAH DIBERIKAN",
-
-      reviewNote:
-        "Approved oleh " +
-        u.name
-
-    }
-  );
-
-
-  audit_(
-    u,
-    "INITIAL_APPROVE",
-    initialId +
-      " -> " +
-      inv.inventoryId
-  );
-
-
-  return ok_({
-
-    message:
-      "ALKER berhasil diverifikasi dan menjadi inventory teknisi.",
-
-    inventoryId:
-      inv.inventoryId
-
-  });
-
-}
-function requests_(u, scope){
-
-  let a = rows_("REQUESTS");
-
-  /*
-   * =====================================================
-   * TEKNISI
-   * =====================================================
-   * Teknisi hanya melihat request miliknya sendiri.
-   */
-  if(u.role === "TEKNISI"){
-
-    a = a.filter(x =>
-      String(x.technicianId || "") ===
-      String(u.userId || "")
-    );
-
-  }
-
-  /*
-   * =====================================================
-   * LEADER
-   * =====================================================
-   *
-   * Untuk saat ini Leader Utama melihat seluruh request
-   * yang menunggu validasi Leader.
-   *
-   * Ini diperlukan karena akun Leader Utama saat ini
-   * mempunyai loker = "LEADER", sedangkan teknisi
-   * mempunyai loker seperti:
-   *
-   * IOAN / ASSURANCE
-   * PSB / FULFILLMENT
-   *
-   * Jadi tidak boleh menggunakan:
-   *
-   * x.loker === u.loker
-   *
-   * untuk Leader Utama.
-   */
-  else if(u.role === "LEADER"){
-
-    /*
-     * Jika halaman meminta data khusus loker
-     * dan nanti Leader sudah mempunyai loker yang benar,
-     * filter bisa digunakan.
-     *
-     * Tetapi Leader Utama saat ini melihat semua.
-     */
     if(
-      scope === "loker" &&
-      String(u.loker || "").toUpperCase() !== "LEADER"
+      x.photoUrl
     ){
 
-      a = a.filter(x =>
-        String(x.loker || "") ===
-        String(u.loker || "")
-      );
-
-    }
-
-  }
-
-  /*
-   * =====================================================
-   * ADMIN / SPV GUDANG
-   * =====================================================
-   *
-   * Bisa melihat seluruh request.
-   */
-
-  /*
-   * Urutkan terbaru di atas.
-   */
-  return a.reverse();
-}
-function createRequest_(u,p){
-  requireRole_(u,["TEKNISI"]);
-  const item=getAllowedLokerItems_(u.loker).find(x=>x.itemId===p.itemId);if(!item)throw new Error("Alker tidak tersedia untuk loker Anda.");
-  const x={requestId:id_("REQ"),itemId:item.itemId,itemName:item.itemName,technicianId:u.userId,technician:u.name,loker:u.loker,requestType:p.requestType,qty:Number(p.qty||1),priority:p.priority,reason:p.reason,photoUrl:savePhoto_(p.photo,"request_"+Date.now()+".jpg"),status:"MENUNGGU VALIDASI LEADER",leaderDecision:"",warehouseDecision:"",date:now_(),updatedAt:now_(),note:""};
-  append_("REQUESTS",x);audit_(u,"REQUEST_CREATE",x.requestId+" "+x.itemName);return ok_(x);
-}
-function requestDecision_(u,p){
-  const x=rows_("REQUESTS").find(a=>a.requestId===p.requestId);if(!x)throw new Error("Request tidak ditemukan.");
-  if(u.role==="LEADER"){
-    if(x.loker!==u.loker)throw new Error("Request bukan dari loker Anda.");
-    const s=p.decision==="APPROVE"?"MENUNGGU PROSES GUDANG":"DITOLAK LEADER";
-    updateById_("REQUESTS","requestId",x.requestId,{status:s,leaderDecision:p.decision,note:p.note||"",updatedAt:now_()});
-    audit_(u,"REQUEST_LEADER_"+p.decision,x.requestId);return ok_({message:"Berhasil"});
-  }
-  if(u.role==="SPV_GUDANG"||u.role==="ADMIN"){
-    if(!/MENUNGGU PROSES GUDANG/.test(x.status))throw new Error("Request belum masuk tahap Gudang.");
-    const stock=rows_("INVENTORY").filter(i=>i.location==="GUDANG"&&i.itemId===x.itemId&&(i.condition==="BAIK"||i.condition==="RUSAK RINGAN")&&i.status==="READY").length;
-    if(p.decision==="APPROVE"){
-      updateById_("REQUESTS","requestId",x.requestId,{status:stock>=x.qty?"DISETUJUI - SIAP DISTRIBUSI":"DISETUJUI - STOK KURANG",warehouseDecision:"APPROVE",updatedAt:now_()});
-    }else updateById_("REQUESTS","requestId",x.requestId,{status:"DITOLAK GUDANG",warehouseDecision:"REJECT",note:p.note||"",updatedAt:now_()});
-    audit_(u,"REQUEST_WAREHOUSE_"+p.decision,x.requestId+" stock="+stock);return ok_({message:"Berhasil",stock});
-  }
-  throw new Error("Role tidak dapat memproses request.");
-}
-function issues_(u,scope){let a=rows_("ISSUES");if(scope==="mine"||u.role==="TEKNISI")a=a.filter(x=>x.technicianId===u.userId);else if(u.role==="LEADER")a=a.filter(x=>x.loker===u.loker);return a.reverse()}
-function reportIssue_(u,p){
-  requireRole_(u,["TEKNISI"]);
-  const inv=rows_("INVENTORY").find(x=>x.inventoryId===p.inventoryId&&x.holderId===u.userId);if(!inv)throw new Error("Inventory tidak ditemukan atau bukan tanggung jawab Anda.");
-  const x={issueId:id_("ISS"),inventoryId:inv.inventoryId,itemId:inv.itemId,itemName:inv.itemName,technicianId:u.userId,technician:u.name,loker:u.loker,issueType:p.issueType,note:p.note,photoUrl:savePhoto_(p.photo,"issue_"+Date.now()+".jpg"),status:"MENUNGGU VERIFIKASI",date:now_(),updatedAt:now_()};
-  append_("ISSUES",x);updateById_("INVENTORY","inventoryId",inv.inventoryId,{condition:p.issueType==="HILANG"?"HILANG":"RUSAK",status:p.issueType==="HILANG"?"HILANG":"RUSAK",updatedAt:now_()});audit_(u,"ISSUE_REPORT",inv.inventoryId+" "+p.issueType);return ok_(x);
-}
-function returns_(u,scope){
-
-  ensureReturnsSheet_();
-
-  let a =
-    rows_("RETURNS");
-
-  if(
-    scope === "mine" ||
-    u.role === "TEKNISI"
-  ){
-
-    a =
-      a.filter(
-        x =>
-          x.technicianId ===
-          u.userId
-      );
-
-  }
-
-  else if(
-    u.role === "LEADER"
-  ){
-
-    a =
-      a.filter(
-        x =>
-          x.loker ===
-          u.loker
-      );
-
-  }
-
-  /*
-   * SPV GUDANG / ADMIN
-   * dapat melihat seluruh pengembalian
-   */
-
-  return a.reverse();
-
-}
-function warehouse_(){
-
-  const inv =
-    rows_("INVENTORY")
-      .filter(
-        x =>
-          String(
-            x.location || ""
-          ).toUpperCase() ===
-          "GUDANG"
-      );
-
-
-  /*
-   * ==========================================
-   * GROUP PER ALKER
-   * ==========================================
-   */
-
-  const grouped = {};
-
-
-  inv.forEach(
-    x => {
-
-      const key =
-        x.itemId ||
-        x.itemName ||
-        "UNKNOWN";
-
-
-      if(
-        !grouped[key]
-      ){
-
-        grouped[key] = {
-
-          itemId:
-            x.itemId || "",
-
-          itemName:
-            x.itemName || "",
-
-          category:
-            x.category || "",
-
-          total:
-            0,
-
-          baik:
-            0,
-
-          rusakRingan:
-            0,
-
-          rusakBerat:
-            0,
-
-          hilang:
-            0,
-
-          siapDipakai:
-            0,
-
-          nilai:
-            0,
-
-          items:
-            []
-
-        };
-
-      }
-
-
-      const g =
-        grouped[key];
-
-
-      g.total++;
-
-
-      const condition =
-        String(
-          x.condition || ""
-        ).toUpperCase();
-
-
-      if(
-        condition ===
-        "BAIK"
-      ){
-
-        g.baik++;
-
-      }
-      else if(
-        condition ===
-        "RUSAK RINGAN"
-      ){
-
-        g.rusakRingan++;
-
-      }
-      else if(
-        condition ===
-        "RUSAK BERAT"
-      ){
-
-        g.rusakBerat++;
-
-      }
-      else if(
-        condition ===
-        "HILANG"
-      ){
-
-        g.hilang++;
-
-      }
-
-
-      /*
-       * SIAP DIPAKAI
-       *
-       * Hanya:
-       * kondisi BAIK atau RUSAK RINGAN
-       * status READY
-       */
-
-      if(
-        (condition === "BAIK" || condition === "RUSAK RINGAN") &&
-        String(
-          x.status || ""
-        ).toUpperCase() ===
-          "READY"
-      ){
-
-        g.siapDipakai++;
-
-      }
-
-
-      g.nilai +=
-        Number(
-          x.price || 0
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
         );
 
 
-      g.items.push(x);
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto ALKER",
+            dataUrl
+          )
+        );
+
+      }
 
     }
-  );
 
 
-  const summary =
-    Object.values(
-      grouped
-    );
+    if(
+      x.serialPhotoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
 
 
-  /*
-   * Urutkan berdasarkan nama ALKER
-   */
+      if(dataUrl){
 
-  summary.sort(
-    (a,b) =>
-      String(
-        a.itemName
-      ).localeCompare(
-        String(
-          b.itemName
-        )
-      )
-  );
-
-
-  return {
-
-    items:
-      inv,
-
-    summary: {
-
-      count:
-        inv.length,
-
-      value:
-        inv.reduce(
-          (s,x) =>
-            s +
-            Number(
-              x.price || 0
-            ),
-          0
-        ),
-
-      requests:
-        rows_("REQUESTS")
-          .filter(
-            x =>
-              /GUDANG|STOK KURANG/
-                .test(
-                  String(
-                    x.status || ""
-                  )
-                )
+        photos.push(
+          photoBox_(
+            "Foto Serial / Label",
+            dataUrl
           )
-          .length,
+        );
 
-      procurement:
-        rows_("PROCUREMENT")
-          .filter(
-            x =>
-              !/SELESAI|DITOLAK/
-                .test(
-                  String(
-                    x.status || ""
-                  )
-                )
-          )
-          .length
+      }
 
-    },
+    }
 
-    byItem:
-      summary
+
+    const area =
+      $("inventoryPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
+          ? `
+
+            <div class="photo-grid">
+              ${photos.join("")}
+            </div>
+
+          `
+          : `
+
+            <div class="photo-empty">
+              Foto tidak tersedia.
+            </div>
+
+          `;
+
+    }
 
   };
 
-}
-/*************************************************
- * BARANG MASUK GUDANG
- *
- * HARGA OTOMATIS DARI MASTER ALKER
- *
- * PENTING:
- * Harga dari frontend / p.price DIABAIKAN.
- * Backend selalu mengambil:
- *
- * MASTER_ALKER.standardPrice
- *
- * Jadi harga tidak bisa dimanipulasi
- * melalui browser.
- *************************************************/
-
-function warehouseStockAdd_(u,p){
-  requireRole_(u,["SPV_GUDANG","ADMIN"]);
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId)===String(p.itemId||""));
-  if(!item) throw new Error("Master ALKER tidak ditemukan.");
-  const quantity=Number(p.quantity||1);
-  if(!Number.isInteger(quantity)||quantity<1||quantity>500) throw new Error("Quantity harus bilangan bulat antara 1 sampai 500.");
-  const serialNumber=String(p.serialNumber||"").trim();
-  if(quantity===1&&!serialNumber) throw new Error("Nomor seri wajib diisi jika quantity 1.");
-  if(quantity>1&&serialNumber) throw new Error("Untuk quantity lebih dari 1, kosongkan kolom nomor seri. Catat daftar SN tiap unit pada keterangan.");
-  if(!p.photo) throw new Error("Foto ALKER wajib diunggah sebagai bukti validasi.");
-  const condition=String(p.condition||"").trim().toUpperCase();
-  const allowed=["BAIK","RUSAK RINGAN","RUSAK BERAT","HILANG"];
-  if(!allowed.includes(condition)) throw new Error("Kondisi ALKER tidak valid.");
-  const brand=String(p.brand||"").trim();
-  const masterPrice=getMasterPrice_(item.itemId,brand);
-  if(!Number.isFinite(masterPrice)||masterPrice<0) throw new Error("Harga Master ALKER tidak valid.");
-  if(serialNumber){
-    const existing=rows_("INVENTORY").find(x=>String(x.location||"").toUpperCase()==="GUDANG"&&String(x.serialNumber||"").trim().toLowerCase()===serialNumber.toLowerCase()&&String(x.itemId||"")===String(item.itemId));
-    if(existing) throw new Error("Nomor seri ini sudah tercatat di Stok Gudang.");
-  }
-  const photoUrl=savePhoto_(p.photo,"validasi_stok_batch_"+now_()+".jpg");
-  const serialPhotoUrl=p.serialPhoto?savePhoto_(p.serialPhoto,"validasi_serial_batch_"+now_()+".jpg"):"";
-  const created=[];
-  for(let i=0;i<quantity;i++){
-    const inventoryId=id_("INV");
-    const unitSerial=quantity===1?serialNumber:"";
-    const status=(condition==="BAIK"||condition==="RUSAK RINGAN")?"READY":condition==="HILANG"?"HILANG":"TIDAK SIAP PAKAI";
-    append_("INVENTORY",{
-      inventoryId:inventoryId,itemId:item.itemId,itemName:item.itemName,category:item.category,
-      brand:brand,type:String(p.type||"").trim(),serialNumber:unitSerial,price:masterPrice,
-      condition:condition,status:status,location:"GUDANG",loker:"GUDANG",holderId:"",holder:"",
-      photoUrl:photoUrl,serialPhotoUrl:serialPhotoUrl,
-      receivedAt:now_(),source:"VALIDASI STOK LAMA",notes:String(p.note||"").trim()+(quantity>1?" | Batch quantity: "+quantity+" unit; SN tiap unit belum dicatat di kolom SN":""),updatedAt:now_()
-    });
-    created.push(inventoryId);
-  }
-  audit_(u,"VALIDASI_STOK_GUDANG","Validasi stok lama: "+item.itemName+" / quantity "+quantity+" / kondisi "+condition+(serialNumber?" / SN "+serialNumber:""));
-  return ok_({inventoryIds:created,quantity:quantity,message:quantity+" unit stok lama berhasil dicatat."});
-}
-
-function receive_(u,p){
-
-  requireRole_(
-    u,
-    [
-      "SPV_GUDANG",
-      "ADMIN"
-    ]
-  );
-
-
-  /*
-   * ==========================================
-   * CARI MASTER ALKER
-   * ==========================================
-   */
-
-  const item =
-    rows_("MASTER_ALKER")
-      .find(
-        x =>
-          String(x.itemId) ===
-          String(p.itemId || "")
-      );
-
-
-  if(!item){
-
-    throw new Error(
-      "Master ALKER tidak ditemukan."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * HARGA MASTER
-   * ==========================================
-   *
-   * TIDAK MENGAMBIL p.price
-   */
-
-  const masterPrice =
-    getMasterPrice_(
-      item.itemId,
-      p.brand
-    );
-
-
-  if(
-    !Number.isFinite(masterPrice) ||
-    masterPrice < 0
-  ){
-
-    throw new Error(
-      "Harga Master ALKER tidak valid."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * JUMLAH
-   * ==========================================
-   */
-
-  const qty =
-    Math.max(
-      1,
-      Number(
-        p.qty || 1
-      )
-    );
-
-
-  const rid =
-    id_("RCV");
-
-
-  /*
-   * ==========================================
-   * SIMPAN INVENTORY
-   * ==========================================
-   */
-
-  for(
-    let i = 0;
-    i < qty;
-    i++
-  ){
-
-    const serialNumber =
-      qty === 1
-
-        ? String(
-            p.serialNumber || ""
-          ).trim()
-
-        : (
-            p.serialNumber
-              ? String(
-                  p.serialNumber
-                ).trim() +
-                "-" +
-                (i + 1)
-
-              : ""
-          );
-
-
-    const inventoryId =
-      id_("INV");
-
-
-    append_(
-      "INVENTORY",
-      {
-
-        inventoryId:
-          inventoryId,
-
-        itemId:
-          item.itemId,
-
-        itemName:
-          item.itemName,
-
-        category:
-          item.category,
-
-        brand:
-          String(
-            p.brand || ""
-          ).trim(),
-
-        type:
-          String(
-            p.type || ""
-          ).trim(),
-
-        serialNumber:
-          serialNumber,
-
-        /*
-         * ==================================
-         * HARGA MASTER
-         * ==================================
-         */
-
-        price:
-          masterPrice,
-
-        condition:
-          "BAIK",
-
-        status:
-          "READY",
-
-        location:
-          "GUDANG",
-
-        loker:
-          "GUDANG",
-
-        holderId:
-          "",
-
-        holder:
-          "",
-
-        photoUrl:
-          savePhoto_(
-            p.photo,
-            "receive_" +
-              rid +
-              "_" +
-              i +
-              ".jpg"
-          ),
-
-        serialPhotoUrl:
-          "",
-
-        receivedAt:
-          now_(),
-
-        source:
-          "BARANG MASUK",
-
-        notes:
-          String(
-            p.note || ""
-          ).trim(),
-
-        updatedAt:
-          now_()
-
-      }
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * SIMPAN LOG RECEIVING
-   * ==========================================
-   *
-   * Harga juga dicatat berdasarkan
-   * MASTER ALKER, bukan harga dari form.
-   */
-
-  append_(
-    "RECEIVING",
-    {
-
-      receivingId:
-        rid,
-
-      itemId:
-        item.itemId,
-
-      itemName:
-        item.itemName,
-
-      qty:
-        qty,
-
-      brand:
-        String(
-          p.brand || ""
-        ).trim(),
-
-      type:
-        String(
-          p.type || ""
-        ).trim(),
-
-      serialNumber:
-        String(
-          p.serialNumber || ""
-        ).trim(),
-
-      price:
-        masterPrice,
-
-      supplier:
-        String(
-          p.supplier || ""
-        ).trim(),
-
-      reference:
-        String(
-          p.reference || ""
-        ).trim(),
-
-      photoUrl:
-        savePhoto_(
-          p.photo,
-          "receiving_" +
-            rid +
-            ".jpg"
-        ),
-
-      docPhotoUrl:
-        savePhoto_(
-          p.docPhoto,
-          "document_" +
-            rid +
-            ".jpg"
-        ),
-
-      note:
-        String(
-          p.note || ""
-        ).trim(),
-
-      status:
-        "SELESAI",
-
-      date:
-        now_(),
-
-      actor:
-        u.name
-
-    }
-  );
-
-
-  /*
-   * ==========================================
-   * AUDIT
-   * ==========================================
-   */
-
-  audit_(
-    u,
-    "RECEIVING",
-    rid +
-      " " +
-      item.itemName +
-      " qty " +
-      qty +
-      " harga master=" +
-      masterPrice
-  );
-
-
-  return ok_({
-
-    receivingId:
-      rid,
-
-    itemId:
-      item.itemId,
-
-    itemName:
-      item.itemName,
-
-    qty:
-      qty,
-
-    price:
-      masterPrice,
-
-    message:
-      "Barang berhasil masuk Gudang dengan harga Master ALKER."
-
-  });
-
-}
-function distribute_(u,p){
-  requireRole_(u,["SPV_GUDANG","ADMIN"]);
-  const inv=rows_("INVENTORY").find(x=>x.inventoryId===p.inventoryId&&x.location==="GUDANG"&&x.status==="READY"&&(x.condition==="BAIK"||x.condition==="RUSAK RINGAN"));if(!inv)throw new Error("Inventory tidak tersedia di Gudang. Hanya kondisi BAIK atau RUSAK RINGAN yang dapat disalurkan.");
-  const t=rows_("USERS").find(x=>x.userId===p.technicianId&&x.role==="TEKNISI");if(!t)throw new Error("Teknisi tidak ditemukan.");
-  updateById_("INVENTORY","inventoryId",inv.inventoryId,{location:"TEKNISI",loker:t.loker,holderId:t.userId,holder:t.name,condition:inv.condition,status:"DIPAKAI",updatedAt:now_()});
-  const did=id_("DST");append_("DISTRIBUTION",{distributionId:did,inventoryId:inv.inventoryId,itemId:inv.itemId,itemName:inv.itemName,technicianId:t.userId,technician:t.name,loker:t.loker,condition:inv.condition,note:p.note,status:"SELESAI",date:now_(),actor:u.name});
-  audit_(u,"DISTRIBUTION",inv.inventoryId+" -> "+t.name);return ok_({distributionId:did});
-}
-function createProcurement_(u,p){
-  requireRole_(u,["SPV_GUDANG","ADMIN"]);
-  const item=rows_("MASTER_ALKER").find(x=>x.itemId===p.itemId);if(!item)throw new Error("Alker tidak ditemukan.");
-  const x={procurementId:id_("PO"),itemId:item.itemId,itemName:item.itemName,qty:Number(p.qty||1),estimate:Number(p.estimate||0),priority:p.priority,reason:p.reason,status:"MENUNGGU APPROVAL PEMBELIAN",requestId:p.requestId||"",date:now_(),updatedAt:now_(),actor:u.name};
-  append_("PROCUREMENT",x);audit_(u,"PROCUREMENT_CREATE",x.procurementId+" "+x.itemName);return ok_(x);
-}
-function addMasterItem_(u,p){
-  ensureMasterPhotoModeColumn_();
-  requireRole_(u,["ADMIN"]);
-  const itemName=String(p.itemName||"").trim();
-  const category=String(p.category||"").trim();
-  const unit=String(p.unit||"UNIT").trim()||"UNIT";
-  const rawLokers=String(p.lokers||"").split("|").map(x=>x.trim()).filter(Boolean);
-  const spec=String(p.spec||"").trim();
-  const price=Number(p.price||0);
-  if(!itemName) throw new Error("Nama ALKER wajib diisi.");
-  if(!category) throw new Error("Kategori ALKER wajib diisi.");
-  if(!rawLokers.length) throw new Error("Pilih minimal satu loker pengguna.");
-  if(!Number.isFinite(price)||price<0) throw new Error("Harga standar tidak valid.");
-  const activeLokers=rows_("LOKERS").filter(x=>String(x.status||"").toUpperCase()==="AKTIF").map(x=>x.name);
-  const lokers=[...new Set(rawLokers)];
-  if(lokers.some(x=>x==="GUDANG"||!activeLokers.includes(x))) throw new Error("Loker pengguna tidak valid. Gudang bukan loker tujuan master ALKER.");
-  const duplicate=rows_("MASTER_ALKER").find(x=>normalizeName_(x.itemName)===normalizeName_(itemName));
-  if(duplicate) throw new Error("Nama ALKER sudah ada di Master. Aktifkan kembali item tersebut jika sebelumnya dinonaktifkan.");
-  const photoMode=String(p.photoMode||"CAMERA").trim().toUpperCase()==="GALLERY"?"GALLERY":"CAMERA";
-  const x={itemId:id_("ALK"),itemName,category,unit,standardPrice:price,lokers:lokers.join("|"),spec,active:"Y",createdAt:now_(),photoMode};
-  append_("MASTER_ALKER",x);
-  lokers.forEach(loker=>append_("MASTER_ALKER_LOKER",{mappingId:id_("MAP"),itemId:x.itemId,loker,active:"Y",createdAt:now_()}));
-  if(isSplicer_(itemName)) ensureSplicerBrandPrices_();
-  audit_(u,"MASTER_ITEM_ADD",x.itemName+" | aktif langsung | "+x.lokers);
-  return ok_({...x,message:"Master ALKER aktif dan langsung tersedia untuk pengguna pada loker yang dipilih; tidak perlu melalui Gudang."});
-}
-
-function updateMasterItemLokers_(u,p){
-  requireRole_(u,["ADMIN"]);
-  const itemId=String(p.itemId||"").trim();
-  const rawLokers=String(p.lokers||"").split("|").map(x=>x.trim()).filter(Boolean);
-  if(!itemId) throw new Error("ID Master ALKER wajib diisi.");
-  if(!rawLokers.length) throw new Error("Pilih minimal satu loker pengguna.");
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId)===itemId);
-  if(!item) throw new Error("Master ALKER tidak ditemukan.");
-  const activeLokers=rows_("LOKERS").filter(x=>String(x.status||"").toUpperCase()==="AKTIF").map(x=>String(x.name||""));
-  const lokers=[...new Set(rawLokers)];
-  if(lokers.some(x=>x==="GUDANG"||!activeLokers.includes(x))) throw new Error("Loker pengguna tidak valid. Gudang bukan loker tujuan master ALKER.");
-
-  // Perbarui daftar loker pada master tanpa mengubah status aktif/nonaktif ALKER.
-  updateById_("MASTER_ALKER","itemId",itemId,{lokers:lokers.join("|")});
-
-  // Sinkronkan tabel mapping: mapping lama yang tidak dipilih dinonaktifkan,
-  // mapping yang dipilih diaktifkan kembali, dan mapping baru dibuat bila perlu.
-  const mappings=rows_("MASTER_ALKER_LOKER").filter(x=>String(x.itemId)===itemId);
-  lokers.forEach(loker=>{
-    const found=mappings.find(x=>String(x.loker)===loker);
-    if(found){
-      updateById_("MASTER_ALKER_LOKER","mappingId",found.mappingId,{active:"Y"});
-    }else{
-      append_("MASTER_ALKER_LOKER",{mappingId:id_("MAP"),itemId,loker,active:"Y",createdAt:now_()});
-    }
-  });
-  mappings.filter(x=>!lokers.includes(String(x.loker))).forEach(x=>updateById_("MASTER_ALKER_LOKER","mappingId",x.mappingId,{active:"N"}));
-  audit_(u,"MASTER_ITEM_LOKERS_UPDATE",itemId+" | "+item.itemName+" | "+lokers.join("|"));
-  return ok_({itemId,itemName:item.itemName,lokers:lokers.join("|"),message:"Loker ALKER berhasil diperbarui."});
-}
-
-function updateMasterItemStatus_(u,p){
-  requireRole_(u,["ADMIN"]);
-  const itemId=String(p.itemId||"").trim();
-  const active=String(p.active||"").trim().toUpperCase();
-  if(!itemId) throw new Error("ID Master ALKER wajib diisi.");
-  if(!["Y","N"].includes(active)) throw new Error("Status aktif tidak valid.");
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId)===itemId);
-  if(!item) throw new Error("Master ALKER tidak ditemukan.");
-  updateById_("MASTER_ALKER","itemId",itemId,{active});
-  // Mapping tetap tersimpan agar ketika diaktifkan kembali item kembali tersedia di loker semula.
-  audit_(u,active==="Y"?"MASTER_ITEM_ENABLE":"MASTER_ITEM_DISABLE",itemId+" | "+item.itemName);
-  return ok_({itemId,itemName:item.itemName,active,message:active==="Y"?"ALKER berhasil diaktifkan.":"ALKER berhasil dinonaktifkan dari pilihan pengguna."});
-}
-function updateMasterPhotoMode_(u,p){
-  requireRole_(u,["ADMIN"]);
-  ensureMasterPhotoModeColumn_();
-  const itemId=String(p.itemId||"").trim();
-  const photoMode=String(p.photoMode||"").trim().toUpperCase();
-  if(!itemId) throw new Error("ID Master ALKER wajib diisi.");
-  if(!["CAMERA","GALLERY"].includes(photoMode)) throw new Error("Pengaturan foto tidak valid.");
-  const item=rows_("MASTER_ALKER").find(x=>String(x.itemId)===itemId);
-  if(!item) throw new Error("Master ALKER tidak ditemukan.");
-  updateById_("MASTER_ALKER","itemId",itemId,{photoMode});
-  audit_(u,"MASTER_ITEM_PHOTO_MODE",itemId+" | "+item.itemName+" | "+photoMode);
-  return ok_({itemId,itemName:item.itemName,photoMode,message:"Pengaturan foto berhasil diperbarui."});
-}
 
 /*************************************************
- * MASTER HARGA ALKER
- * LIST MASTER HARGA
+ * INPUT ALKER AWAL
+ *
+ * PILIHAN:
+ *
+ * 1. SUDAH DIBERIKAN
+ *    -> Merk
+ *    -> Type
+ *    -> Serial
+ *    -> Kondisi
+ *    -> Foto
+ *
+ * 2. BELUM DIBERIKAN
+ *    -> Tidak perlu data fisik
+ *    -> Masuk proses pengadaan
  *************************************************/
 
 
 /*************************************************
- * MASTER HARGA PER MEREK
- * KHUSUS ALKER SPlicer
+ * MASTER MEREK SPlicer
  *************************************************/
 
-const SPlicer_BRANDS = [
+const SPlicer_BRANDS_UI = [
   "Sumitomo",
   "Jointwit",
   "Fujikura",
@@ -4815,1327 +2682,10234 @@ const SPlicer_BRANDS = [
   "TUMTEC"
 ];
 
-function isSplicer_(itemName){
-  return normalizeName_(itemName) === "splicer";
+function isSplicerItem_(itemName){
+  return String(itemName || "").trim().toLowerCase() === "splicer";
 }
 
-function ensureMasterPriceSheet_(){
-
-  const ss = ss_();
-  let sh = ss.getSheetByName("MASTER_ALKER_PRICE");
-
-  if(!sh){
-    sh = ss.insertSheet("MASTER_ALKER_PRICE");
-    sh.appendRow(HEADERS.MASTER_ALKER_PRICE);
-    sh.setFrozenRows(1);
-  }else if(sh.getLastRow() === 0){
-    sh.appendRow(HEADERS.MASTER_ALKER_PRICE);
-    sh.setFrozenRows(1);
+function splicerBrandFieldHtml_(item, value = "", id = ""){
+  if(!isSplicerItem_(item?.itemName)){
+    return `
+      <input
+        name="brand"
+        ${id ? `id="${id}"` : ""}
+        value="${esc(value || "")}"
+      >
+    `;
   }
 
-  return sh;
+  return `
+    <select
+      name="brand"
+      ${id ? `id="${id}"` : ""}
+      required
+    >
+      <option value="">Pilih Merek Splicer</option>
+      ${
+        SPlicer_BRANDS_UI.map(b => `
+          <option
+            value="${esc(b)}"
+            ${
+              String(value || "").toLowerCase() === b.toLowerCase()
+                ? "selected"
+                : ""
+            }
+          >
+            ${esc(b)}
+          </option>
+        `).join("")
+      }
+    </select>
+  `;
 }
 
-function ensureSplicerBrandPrices_(){
+window.showInitialForm =
+  async () => {
 
-  ensureMasterPriceSheet_();
-
-  const masters = rows_("MASTER_ALKER")
-    .filter(x => isSplicer_(x.itemName));
-
-  if(!masters.length) return;
-
-  const existing = rows_("MASTER_ALKER_PRICE");
-
-  masters.forEach(item => {
-
-    SPlicer_BRANDS.forEach(brand => {
-
-      const found = existing.find(x =>
-        String(x.itemId || "") === String(item.itemId || "") &&
-        String(x.brand || "").trim().toLowerCase() === brand.toLowerCase()
+    const r =
+      await api(
+        "masters"
       );
 
-      if(!found){
 
-        append_("MASTER_ALKER_PRICE", {
-          priceId: id_("PRC"),
-          itemId: item.itemId,
-          itemName: item.itemName,
-          brand: brand,
-          type: "",
-          price: 0,
-          active: "Y",
-          createdAt: now_(),
-          updatedAt: now_()
-        });
+    const items =
+      r.data?.items ||
+      [];
+
+
+    openModal(
+
+      "Input Alker Awal",
+
+      `
+
+        <p class="muted">
+
+          Pilih status ALKER terlebih dahulu.
+          Data akan diverifikasi oleh Gudang.
+
+        </p>
+
+
+        <form id="initialForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${
+                  items
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(
+                            x.itemId
+                          )}"
+                        >
+                          ${esc(
+                            x.itemName
+                          )}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Status Pemberian
+
+              <select
+                name="givenStatus"
+                id="initialGivenStatus"
+                required
+              >
+
+                <option value="">
+                  -- Pilih Status --
+                </option>
+
+                <option value="SUDAH DIBERIKAN">
+                  SUDAH DIBERIKAN
+                </option>
+
+                <option value="BELUM DIBERIKAN">
+                  BELUM DIBERIKAN
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <div
+              id="initialPhysicalFields"
+              class="full-col"
+            >
+
+              <div class="form-grid">
+
+
+                <label>
+
+                  Merk
+
+                  <div id="initialBrandWrap">
+                  <input
+                    name="brand"
+                    id="initialBrand"
+                  >
+                </div>
+
+                </label>
+
+
+                <label>
+
+                  Type
+
+                  <input
+                    name="type"
+                    id="initialType"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Serial Number
+
+                  <input
+                    name="serialNumber"
+                    id="initialSerial"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Kondisi
+
+                  <select
+                    name="condition"
+                    id="initialCondition"
+                  >
+
+                    <option>
+                      BAIK
+                    </option>
+
+                    <option>
+                      RUSAK RINGAN
+                    </option>
+
+                    <option>
+                      RUSAK BERAT
+                    </option>
+
+                  </select>
+
+                </label>
+
+
+                <label>
+
+                  Foto Alker
+
+                  <input
+                    name="photo"
+                    id="initialPhoto"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                  >
+
+                </label>
+
+
+                <label>
+
+                  Foto Serial / Label
+
+                  <input
+                    name="serialPhoto"
+                    id="initialSerialPhoto"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                  >
+
+                </label>
+
+
+              </div>
+
+            </div>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+                id="initialNote"
+                placeholder="Tambahkan keterangan jika diperlukan..."
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            id="initialInfo"
+            class="card"
+            style="margin-top:15px; display:none"
+          ></div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Kirim ke Gudang
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    const status =
+      $("initialGivenStatus");
+
+    const physical =
+      $("initialPhysicalFields");
+
+    const info =
+      $("initialInfo");
+
+
+    function updateInitialMode(){
+
+      const value =
+        status.value;
+
+
+      if(
+        value ===
+        "SUDAH DIBERIKAN"
+      ){
+
+        physical.style.display =
+          "block";
+
+
+        $("initialBrand")
+          .required = true;
+
+        $("initialType")
+          .required = true;
+
+        $("initialSerial")
+          .required = false;
+
+        $("initialPhoto")
+          .required = true;
+		  
+		// FOTO SERIAL TIDAK WAJIB
+		$("initialSerialPhoto")
+		.required = false;
+
+        info.style.display =
+          "block";
+
+
+        info.innerHTML = `
+
+          <strong>
+            ALKER SUDAH DIBERIKAN
+          </strong>
+
+          <p class="muted">
+            Lengkapi data fisik ALKER,
+            Sesuaikan SN Splice : Sumitomo,Jointwit,Fujikura,INO,ADV,TUMTEC.
+          </p>
+
+        `;
 
       }
 
-    });
+      else if(
+        value ===
+        "BELUM DIBERIKAN"
+      ){
 
-  });
+        physical.style.display =
+          "none";
 
-}
 
-function getMasterPrice_(itemId, brand){
+        $("initialBrand")
+          .required = false;
 
-  const item =
-    rows_("MASTER_ALKER")
-      .find(x =>
-        String(x.itemId || "") === String(itemId || "")
-      );
+        $("initialType")
+          .required = false;
 
-  if(!item){
-    throw new Error("Master ALKER tidak ditemukan.");
-  }
+        $("initialSerial")
+          .required = false;
 
-  if(isSplicer_(item.itemName)){
+        $("initialPhoto")
+          .required = false;
 
-    ensureSplicerBrandPrices_();
+        $("initialSerialPhoto")
+          .required = false;
 
-    const b =
-      String(brand || "").trim().toLowerCase();
 
-    if(!b){
-      throw new Error(
-        "Merek Splicer wajib dipilih."
-      );
+        info.style.display =
+          "block";
+
+
+        info.innerHTML = `
+
+          <strong>
+            ALKER BELUM DIBERIKAN
+          </strong>
+
+          <p class="muted">
+            Data ini tidak akan menjadi
+            inventory teknisi.
+            Setelah diverifikasi Gudang,
+            data akan diteruskan ke proses
+            pengadaan.
+          </p>
+
+        `;
+
+      }
+
+      else{
+
+        physical.style.display =
+          "none";
+
+        info.style.display =
+          "none";
+
+      }
+
     }
 
-    const variant =
-      rows_("MASTER_ALKER_PRICE")
-        .find(x =>
-          String(x.itemId || "") === String(item.itemId || "") &&
-          String(x.brand || "").trim().toLowerCase() === b &&
-          String(x.active || "Y").toUpperCase() === "Y"
-        );
 
-    if(!variant){
-      throw new Error(
-        "Merek Splicer belum tersedia di Master Harga."
-      );
+    status.onchange =
+      updateInitialMode;
+
+    const initialItemSelect = $("initialForm")?.elements?.itemId;
+    const applyInitialPhotoMode = () => {
+      const selected = items.find(x => String(x.itemId) === String(initialItemSelect?.value));
+      const gallery = String(selected?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("initialPhoto"), $("initialSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    };
+    if (initialItemSelect) initialItemSelect.addEventListener("change", applyInitialPhotoMode);
+    applyInitialPhotoMode();
+
+$("initialForm").onsubmit =
+  async e => {
+
+    e.preventDefault();
+
+    const f = e.target;
+
+    // ==========================================
+    // CEGAH DOUBLE SUBMIT
+    // ==========================================
+
+    if (f.dataset.saving === "1") {
+      return;
     }
 
-    const price =
-      Number(variant.price || 0);
+    f.dataset.saving = "1";
 
-    if(!Number.isFinite(price) || price < 0){
-      throw new Error(
-        "Harga Master Splicer tidak valid."
+    const submitBtn =
+      f.querySelector(
+        'button[type="submit"]'
       );
+
+    const cancelBtn =
+      f.querySelector(
+        'button[type="button"]'
+      );
+
+
+    // Simpan teks asli
+    const originalText =
+      submitBtn
+        ? submitBtn.textContent
+        : "Kirim ke Gudang";
+
+
+    // ==========================================
+    // LOCK FORM
+    // ==========================================
+
+    if (submitBtn) {
+
+      submitBtn.disabled = true;
+
+      submitBtn.innerHTML =
+        "⏳ Sedang menyimpan...";
+
     }
 
-    return price;
-  }
 
-  const price =
-    Number(item.standardPrice || 0);
+    if (cancelBtn) {
 
-  if(!Number.isFinite(price) || price < 0){
-    throw new Error(
-      "Harga Master ALKER tidak valid."
-    );
-  }
+      cancelBtn.disabled = true;
 
-  return price;
-}
+    }
 
-function masterBrandPrices_(u, itemId){
 
-  requireRole_(u,[
-    "SPV_GUDANG",
-    "ADMIN"
-  ]);
-
-  ensureSplicerBrandPrices_();
-
-  const item =
-    rows_("MASTER_ALKER")
-      .find(x =>
-        String(x.itemId || "") === String(itemId || "")
+    const inputs =
+      f.querySelectorAll(
+        "input, select, textarea"
       );
 
-  if(!item){
-    throw new Error("Master ALKER tidak ditemukan.");
-  }
 
-  if(!isSplicer_(item.itemName)){
-    throw new Error(
-      "ALKER ini tidak menggunakan harga berdasarkan merek."
+    inputs.forEach(
+      el => {
+
+        el.disabled = true;
+
+      }
     );
-  }
 
-  return rows_("MASTER_ALKER_PRICE")
-    .filter(x =>
-      String(x.itemId || "") === String(item.itemId || "") &&
-      String(x.active || "Y").toUpperCase() === "Y"
-    )
-    .map(x => ({
-      priceId: x.priceId,
-      itemId: x.itemId,
-      itemName: item.itemName,
-      brand: x.brand,
-      type: x.type || "",
-      price: Number(x.price || 0)
-    }));
-}
 
-function updateMasterBrandPrices_(u,p){
-
-  requireRole_(u,[
-    "SPV_GUDANG",
-    "ADMIN"
-  ]);
-
-  const itemId =
-    String(p.itemId || "").trim();
-
-  if(!itemId){
-    throw new Error("ID ALKER tidak ditemukan.");
-  }
-
-  const item =
-    rows_("MASTER_ALKER")
-      .find(x =>
-        String(x.itemId || "") === itemId
-      );
-
-  if(!item){
-    throw new Error("Master ALKER tidak ditemukan.");
-  }
-
-  if(!isSplicer_(item.itemName)){
-    throw new Error(
-      "Perubahan harga per merek hanya untuk Splicer."
-    );
-  }
-
-  ensureSplicerBrandPrices_();
-
-  /*
-   * Frontend mengirim array melalui POST sebagai JSON string.
-   * Tetap dukung array langsung agar kompatibel dengan versi lama.
-   */
-  let prices = [];
-
-  if (Array.isArray(p.prices)) {
-    prices = p.prices;
-  } else if (typeof p.prices === "string" && p.prices.trim()) {
     try {
-      prices = JSON.parse(p.prices);
-    } catch (err) {
-      throw new Error(
-        "Format daftar harga Splicer tidak valid."
-      );
-    }
-  }
 
-  if(prices.length !== SPlicer_BRANDS.length){
-    throw new Error(
-      "Daftar harga Splicer tidak lengkap."
-    );
-  }
+      const givenStatus =
+        f.givenStatus.value;
 
-  prices.forEach(v => {
 
-    const brand =
-      String(v.brand || "").trim();
+      if (!givenStatus) {
 
-    if(!SPlicer_BRANDS.some(
-      b => b.toLowerCase() === brand.toLowerCase()
-    )){
-      throw new Error(
-        "Merek Splicer tidak valid: " + brand
-      );
-    }
-
-    const raw =
-      String(v.price ?? "")
-        .replace(/[^\d]/g,"");
-
-    if(raw === ""){
-      throw new Error(
-        "Harga untuk " + brand + " wajib diisi."
-      );
-    }
-
-    const price =
-      Number(raw);
-
-    if(!Number.isFinite(price) || price < 0){
-      throw new Error(
-        "Harga untuk " + brand + " tidak valid."
-      );
-    }
-
-    const row =
-      rows_("MASTER_ALKER_PRICE")
-        .find(x =>
-          String(x.itemId || "") === itemId &&
-          String(x.brand || "").trim().toLowerCase() === brand.toLowerCase()
+        throw new Error(
+          "Pilih status pemberian ALKER."
         );
 
-    if(row){
+      }
 
-      updateById_(
-        "MASTER_ALKER_PRICE",
-        "priceId",
-        row.priceId,
+
+      let photo = "";
+      let serialPhoto = "";
+
+
+      // ==========================================
+      // ALKER SUDAH DIBERIKAN
+      // ==========================================
+
+      if (
+        givenStatus ===
+        "SUDAH DIBERIKAN"
+      ) {
+
+        // Foto ALKER tetap WAJIB
+        photo =
+          await fileToBase64(
+            f.photo.files[0]
+          );
+
+
+        if (!photo) {
+
+          throw new Error(
+            "Foto ALKER wajib diupload."
+          );
+
+        }
+
+
+        // ========================================
+        // FOTO SERIAL OPSIONAL
+        // ========================================
+
+        if (
+          f.serialPhoto.files &&
+          f.serialPhoto.files[0]
+        ) {
+
+          serialPhoto =
+            await fileToBase64(
+              f.serialPhoto.files[0]
+            );
+
+        }
+
+      }
+
+
+      // ==========================================
+      // KIRIM KE SERVER
+      // ==========================================
+
+      await api(
+        "initialSubmit",
         {
-          price: price,
-          updatedAt: now_()
+
+          itemId:
+            f.itemId.value,
+
+          givenStatus:
+            givenStatus,
+
+          brand:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.brand.value
+              : "",
+
+          type:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.type.value
+              : "",
+
+          serialNumber:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.serialNumber.value
+              : "",
+
+          condition:
+            givenStatus ===
+              "SUDAH DIBERIKAN"
+              ? f.condition.value
+              : "BELUM DIVERIFIKASI",
+
+          note:
+            f.note.value,
+
+          photo:
+            photo,
+
+          serialPhoto:
+            serialPhoto
+
         }
       );
 
-    }
 
-  });
+      // ==========================================
+      // BERHASIL
+      // ==========================================
 
-  audit_(
-    u,
-    "MASTER_BRAND_PRICE_UPDATE",
-    itemId + " | " + item.itemName
-  );
-
-  return ok_({
-    itemId: itemId,
-    itemName: item.itemName,
-    message:
-      "Harga Splicer per merek berhasil diperbarui."
-  });
-}
-
-function masterPrices_(u){
-
-  requireRole_(u,[
-    "SPV_GUDANG",
-    "ADMIN"
-  ]);
-
-  ensureSplicerBrandPrices_();
-
-  return rows_("MASTER_ALKER")
-    .filter(
-      x =>
-        String(x.active || "Y")
-          .toUpperCase() === "Y"
-    )
-    .map(
-      x => ({
-        itemId: x.itemId,
-        itemName: x.itemName,
-        category: x.category,
-        unit: x.unit || "UNIT",
-        price: Number(x.standardPrice || 0),
-        spec: x.spec || "",
-        lokers: x.lokers || "",
-        active: x.active,
-        priceMode: isSplicer_(x.itemName)
-          ? "BY_BRAND"
-          : "STANDARD",
-        brands: isSplicer_(x.itemName)
-          ? masterBrandPrices_(u, x.itemId)
-          : []
-      })
-    );
-}
-
-/**
- * ==========================================
- * UPDATE HARGA MASTER ALKER
- * ==========================================
- *
- * Harga master hanya dapat diubah
- * oleh GUDANG / ADMIN.
- *
- * Perubahan ini HANYA mengubah
- * MASTER_ALKER.standardPrice.
- *
- * INVENTORY yang sudah ada TIDAK ikut berubah.
- */
-function updateMasterPrice_(u,p){
-
-  requireRole_(u,[
-    "SPV_GUDANG",
-    "ADMIN"
-  ]);
+      closeModal();
 
 
-  const itemId =
-    String(
-      p.itemId || ""
-    ).trim();
+      toast(
+        givenStatus ===
+          "SUDAH DIBERIKAN"
+
+          ? "ALKER berhasil dikirim ke Gudang."
+
+          : "Pengajuan ALKER berhasil dikirim ke Gudang."
+      );
 
 
-  if(!itemId){
-
-    throw new Error(
-      "ID ALKER tidak ditemukan."
-    );
-
-  }
+      await renderMyInventory();
 
 
-  /*
-   * Harga harus berupa angka.
-   */
+    } catch (err) {
 
-  const rawPrice =
-    String(
-      p.price ?? ""
-    ).replace(
-      /[^\d]/g,
-      ""
-    );
+      // ==========================================
+      // GAGAL → BUKA KEMBALI FORM
+      // ==========================================
+
+      f.dataset.saving = "0";
 
 
-  if(!rawPrice){
+      if (submitBtn) {
 
-    throw new Error(
-      "Harga ALKER wajib diisi."
-    );
+        submitBtn.disabled = false;
 
-  }
+        submitBtn.textContent =
+          originalText;
 
-
-  const price =
-    Number(rawPrice);
+      }
 
 
-  if(
-    !Number.isFinite(price) ||
-    price < 0
-  ){
+      if (cancelBtn) {
 
-    throw new Error(
-      "Harga ALKER tidak valid."
-    );
+        cancelBtn.disabled = false;
 
-  }
+      }
 
 
-  /*
-   * Cari master ALKER.
-   */
+      inputs.forEach(
+        el => {
 
-  const item =
-    rows_(
-      "MASTER_ALKER"
-    ).find(
-      x =>
-        String(x.itemId) ===
-        itemId
-    );
+          el.disabled = false;
+
+        }
+      );
 
 
-  if(!item){
-
-    throw new Error(
-      "Master ALKER tidak ditemukan."
-    );
-
-  }
-
-
-  if(isSplicer_(item.itemName)){
-
-    throw new Error(
-      "Splicer menggunakan harga per merek. Gunakan menu Harga per Merek."
-    );
-
-  }
-
-
-  const oldPrice =
-    Number(
-      item.standardPrice || 0
-    );
-
-
-  /*
-   * Update hanya harga master.
-   */
-
-  updateById_(
-    "MASTER_ALKER",
-    "itemId",
-    itemId,
-    {
-
-      standardPrice:
-        price,
-
-      updatedAt:
-        now_()
+      toast(
+        err.message ||
+        "Gagal menyimpan data."
+      );
 
     }
-  );
-
-
-  /*
-   * Catat perubahan.
-   */
-
-  audit_(
-    u,
-    "MASTER_PRICE_UPDATE",
-    itemId +
-    " : " +
-    item.itemName +
-    " | " +
-    oldPrice +
-    " -> " +
-    price
-  );
-
-
-  return ok_({
-
-    itemId:
-      itemId,
-
-    itemName:
-      item.itemName,
-
-    oldPrice:
-      oldPrice,
-
-    standardPrice:
-      price,
-
-    message:
-      "Harga master ALKER berhasil diperbarui."
-
-  });
-
-}
-// Placeholder for explicit return transaction. Kept separate so later approval can be expanded.
-/*************************************************
- * PENGAJUAN PENGEMBALIAN ALKER
- *
- * TEKNISI
- *
- * ALUR:
- * TEKNISI
- *    ↓
- * MENUNGGU VERIFIKASI
- *    ↓
- * SPV GUDANG
- *
- * INVENTORY BELUM DIPINDAHKAN KE GUDANG
- *************************************************/
-
-function returnItem_(u,p){
-
-  requireRole_(
-    u,
-    ["TEKNISI"]
-  );
-
-  ensureReturnsSheet_();
-
-
-  const inventoryId =
-    String(
-      p.inventoryId || ""
-    ).trim();
-
-
-  if(!inventoryId){
-
-    throw new Error(
-      "Inventory tidak ditemukan."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * CARI INVENTORY MILIK TEKNISI
-   * ==========================================
-   */
-
-  const inv =
-    rows_("INVENTORY")
-      .find(
-        x =>
-          x.inventoryId ===
-            inventoryId &&
-
-          x.holderId ===
-            u.userId
-      );
-
-
-  if(!inv){
-
-    throw new Error(
-      "ALKER tidak ditemukan atau bukan tanggung jawab Anda."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * CEK STATUS
-   * ==========================================
-   */
-
-  if(
-    inv.status ===
-    "PENGEMBALIAN"
-  ){
-
-    throw new Error(
-      "ALKER ini sudah menunggu verifikasi Gudang."
-    );
-
-  }
-
-
-  if(
-    inv.location !==
-    "TEKNISI"
-  ){
-
-    throw new Error(
-      "ALKER ini tidak sedang berada pada teknisi."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * CEK PENGEMBALIAN AKTIF
-   * ==========================================
-   */
-
-  const existing =
-    rows_("RETURNS")
-      .find(
-        x =>
-          x.inventoryId ===
-            inventoryId &&
-
-          (
-            x.status ===
-              "MENUNGGU VERIFIKASI" ||
-
-            x.status ===
-              "REVISI"
-          )
-      );
-
-
-  if(existing){
-
-    throw new Error(
-      "Pengembalian ALKER ini masih dalam proses."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * DATA
-   * ==========================================
-   */
-
-  const condition =
-    String(
-      p.condition ||
-      "BAIK"
-    ).trim();
-
-
-  const note =
-    String(
-      p.note ||
-      ""
-    ).trim();
-
-
-  if(!p.photo){
-
-    throw new Error(
-      "Foto ALKER saat pengembalian wajib diupload."
-    );
-
-  }
-
-
-  /*
-   * FOTO SERIAL OPSIONAL
-   */
-
-  const returnId =
-    id_("RET");
-
-
-  /*
-   * ==========================================
-   * FOLDER FOTO
-   * ==========================================
-   */
-
-  let photoFolder = null;
-
-  try{
-
-    const alkerFolder =
-      getAlkerFolder_(
-        inv.itemName
-      );
-
-    photoFolder =
-      getTechnicianFolder_(
-        alkerFolder,
-        u.name,
-        inv.serialNumber
-      );
-
-  }catch(err){
-
-    /*
-     * Jika struktur folder belum tersedia,
-     * tetap lanjut simpan ke folder utama.
-     */
-
-    photoFolder = null;
-
-  }
-
-
-  /*
-   * ==========================================
-   * SIMPAN FOTO
-   * ==========================================
-   */
-
-  const returnPhotoUrl =
-    savePhoto_(
-      p.photo,
-      "FOTO_PENGEMBALIAN_" +
-      returnId +
-      ".jpg",
-      photoFolder
-    );
-
-
-  const returnSerialPhotoUrl =
-    p.serialPhoto
-      ? savePhoto_(
-          p.serialPhoto,
-          "FOTO_SERIAL_PENGEMBALIAN_" +
-          returnId +
-          ".jpg",
-          photoFolder
-        )
-      : "";
-
-
-  if(!returnPhotoUrl){
-
-    throw new Error(
-      "Foto pengembalian gagal disimpan."
-    );
-
-  }
-
-
-  /*
-   * ==========================================
-   * SIMPAN TRANSAKSI RETURNS
-   * ==========================================
-   */
-
-  const data = {
-
-    returnId:
-      returnId,
-
-    inventoryId:
-      inv.inventoryId,
-
-    itemId:
-      inv.itemId,
-
-    itemName:
-      inv.itemName,
-
-    technicianId:
-      inv.holderId,
-
-    technician:
-      inv.holder,
-
-    loker:
-      inv.loker,
-
-    condition:
-      condition,
-
-    note:
-      note,
-
-    photoUrl:
-      returnPhotoUrl,
-
-    serialPhotoUrl:
-      returnSerialPhotoUrl,
-
-    status:
-      "MENUNGGU VERIFIKASI",
-
-    date:
-      now_(),
-
-    actor:
-      u.name,
-
-    reviewNote:
-      "",
-
-    reviewedAt:
-      "",
-
-    reviewedBy:
-      ""
 
   };
 
+};
 
-  append_(
-    "RETURNS",
-    data
-  );
+/*************************************************
+ * LAPORAN ALKER
+ *************************************************/
+
+async function renderInitialReport() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Laporan Alker
+        </h2>
+
+        <p class="muted">
+
+          Laporkan kondisi ALKER
+          yang Anda pegang.
+
+        </p>
+
+      </div>
 
 
-  /*
-   * ==========================================
-   * LOCK INVENTORY
-   *
-   * BELUM PINDAH KE GUDANG
-   * ==========================================
-   */
+      <button
+        class="btn primary"
+        onclick="showInitialForm()"
+      >
+        + Tambah Laporan
+      </button>
 
-  updateById_(
-    "INVENTORY",
-    "inventoryId",
-    inv.inventoryId,
-    {
+    </div>
 
-      status:
-        "PENGEMBALIAN",
 
-      updatedAt:
-        now_()
+    <div id="reportBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  try {
+
+    const [
+      inv,
+      issues
+    ] =
+      await Promise.all([
+
+        api(
+          "inventory",
+          {scope: "mine"}
+        ),
+
+        api(
+          "issues",
+          {scope: "mine"}
+        )
+
+      ]);
+
+
+    const items =
+      inv.data || [];
+
+
+    const problem =
+      (issues.data || [])
+        .filter(
+          x =>
+            /MENUNGGU|PROSES/i.test(
+              x.status || ""
+            )
+        );
+
+
+    $("reportBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "ALKER Tercatat",
+          items.length,
+          "tanggung jawab"
+        )}
+
+        ${metric(
+          "Kondisi Bermasalah",
+          items.filter(
+            x =>
+              /RUSAK|HILANG/i.test(
+                x.condition || ""
+              )
+          ).length,
+          "perlu perhatian"
+        )}
+
+        ${metric(
+          "Laporan Masalah",
+          problem.length,
+          "menunggu proses"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <h3>
+          ALKER Saya
+        </h3>
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+
+              <tr>
+
+                <th>ALKER</th>
+                <th>Merk / Type</th>
+                <th>SN</th>
+                <th>Kondisi</th>
+                <th>Status</th>
+                <th></th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                items
+                  .map(
+                    x => `
+
+                      <tr>
+
+                        <td>
+
+                          <strong>
+                            ${esc(x.itemName)}
+                          </strong>
+
+                          <div class="small muted">
+                            ${esc(x.inventoryId)}
+                          </div>
+
+                        </td>
+
+                        <td>
+                          ${esc(x.brand || "-")}
+                          /
+                          ${esc(x.type || "-")}
+                        </td>
+
+                        <td>
+                          ${esc(
+                            x.serialNumber || "-"
+                          )}
+                        </td>
+
+                        <td>
+                          ${badge(x.condition)}
+                        </td>
+
+                        <td>
+                          ${badge(x.status)}
+                        </td>
+
+                        <td>
+
+                          <button
+                            class="btn secondary"
+                            onclick='showInventoryDetail(${JSON.stringify(x)})'
+                          >
+                            Detail
+                          </button>
+
+                        </td>
+
+                      </tr>
+
+                    `
+                  )
+                  .join("") ||
+
+                `<tr>
+
+                  <td colspan="6">
+
+                    <div class="empty">
+                      Belum ada ALKER
+                      yang disetujui Gudang.
+                    </div>
+
+                  </td>
+
+                </tr>`
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+  } catch (e) {
+
+    $("reportBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat laporan
+        </strong>
+
+        <p class="danger-text">
+          ${esc(e.message)}
+        </p>
+
+      </div>
+
+    `;
+  }
+}
+
+/*************************************************
+ * KEPUTUSAN VERIFIKASI INVENTORY AWAL
+ *************************************************/
+
+window.initialDecision =
+  async (
+    id,
+    decision
+  ) => {
+
+    if(!id){
+
+      toast(
+        "ID pengajuan tidak ditemukan."
+      );
+
+      return;
 
     }
-  );
+
+
+    /*
+     * APPROVE / VERIFIKASI
+     */
+
+    if(
+      decision ===
+      "APPROVE"
+    ){
+
+      const yakin =
+        confirm(
+          "Proses pengajuan ALKER ini?"
+        );
+
+
+      if(!yakin){
+        return;
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "initialDecision",
+            {
+
+              initialId:
+                id,
+
+              decision:
+                "APPROVE"
+
+            }
+          );
+
+
+        toast(
+          r.data?.message ||
+          "Pengajuan berhasil diproses."
+        );
+
+
+        await renderInitial();
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal memproses pengajuan."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    /*
+     * REVISION
+     */
+
+    if(
+      decision ===
+      "REVISION"
+    ){
+
+      const note =
+        prompt(
+          "Masukkan alasan revisi:"
+        );
+
+
+      if(note === null){
+        return;
+      }
+
+
+      if(!note.trim()){
+
+        toast(
+          "Alasan revisi wajib diisi."
+        );
+
+        return;
+
+      }
+
+
+      try{
+
+        await api(
+          "initialDecision",
+          {
+
+            initialId:
+              id,
+
+            decision:
+              "REVISION",
+
+            note:
+              note.trim()
+
+          }
+        );
+
+
+        toast(
+          "Pengajuan dikembalikan ke teknisi."
+        );
+
+
+        await renderInitial();
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal mengirim revisi."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    toast(
+      "Keputusan tidak dikenal."
+    );
+
+  };
+
+/*************************************************
+ * REQUEST
+ *************************************************/
+
+async function renderRequests() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Request Alker
+        </h2>
+
+        <p class="muted">
+          Request baru atau penggantian
+          mengikuti alur validasi.
+        </p>
+
+      </div>
+
+
+      ${
+        session.role === "TEKNISI"
+          ? `
+            <button
+              class="btn primary"
+              onclick="showRequestForm()"
+            >
+              + Request
+            </button>
+          `
+          : ""
+      }
+
+    </div>
+
+
+    <div id="req">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const scope =
+    session.role === "TEKNISI"
+      ? "mine"
+      : "loker";
+
+
+  const r =
+    await api(
+      "requests",
+      {scope}
+    );
+
+
+  $("req").innerHTML =
+    tableRequests(
+      r.data || []
+    );
+}
+
+
+function tableRequests(a) {
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Request</th>
+            <th>Teknisi</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th>Tanggal</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            a
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.requestId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.requestType)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+
+                      <button
+                        class="btn secondary"
+                        onclick='showRequestDetail(${JSON.stringify(x)})'
+                      >
+                        Detail
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="8">
+
+                <div class="empty">
+                  Belum ada request.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showRequestDetail =
+  x => {
+
+    openModal(
+
+      "Detail Request",
+
+      `
+
+        <div class="detail-grid">
+
+          ${[
+            ["Request", x.requestId],
+            ["Teknisi", x.technician],
+            ["Loker", x.loker],
+            ["Alker", x.itemName],
+            ["Jenis", x.requestType],
+            ["Qty", x.qty],
+            ["Prioritas", x.priority],
+            ["Status", x.status],
+            ["Tanggal", x.date]
+          ]
+            .map(
+              a => `
+
+                <div class="detail-box">
+
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong>
+                    ${esc(a[1] || "-")}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        <div
+          class="card"
+          style="margin-top:12px"
+        >
+
+          <strong>
+            Alasan
+          </strong>
+
+          <p>
+            ${esc(x.reason || "-")}
+          </p>
+
+        </div>
+
+      `
+    );
+  };
+
+
+window.showRequestForm =
+  async () => {
+
+    const r =
+      await api("masters");
+
+
+    openModal(
+
+      "Request ALKER",
+
+      `
+
+        <form id="requestForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${(
+                  r.data?.items || []
+                )
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.itemId)}"
+                      >
+
+                        ${esc(x.itemName)}
+                        —
+                        ${esc(x.category)}
+
+                      </option>
+
+                    `
+                  )
+                  .join("")}
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Jenis Request
+
+              <select
+                name="requestType"
+              >
+
+                <option>
+                  BARU
+                </option>
+
+                <option>
+                  PENGGANTIAN
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Prioritas
+
+              <select
+                name="priority"
+              >
+
+                <option>
+                  NORMAL
+                </option>
+
+                <option>
+                  TINGGI
+                </option>
+
+                <option>
+                  MENDESAK
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Alasan
+
+              <textarea
+                name="reason"
+                required
+              ></textarea>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Foto Pendukung
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+              type="submit"
+            >
+              Kirim Request
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("requestForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "createRequest",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              requestType:
+                f.requestType.value,
+
+              qty:
+                f.qty.value,
+
+              priority:
+                f.priority.value,
+
+              reason:
+                f.reason.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Request berhasil dikirim."
+          );
+
+
+          renderRequests();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * RUSAK / HILANG
+ *************************************************/
+
+async function renderIssues() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Rusak / Hilang
+        </h2>
+
+        <p class="muted">
+          Laporkan kondisi ALKER
+          yang menjadi tanggung jawab Anda.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="issues">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "issues",
+      {scope: "mine"}
+    );
+
+
+  $("issues").innerHTML = `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Inventory</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Keterangan</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${esc(x.inventoryId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.issueType)}
+                    </td>
+
+                    <td>
+                      ${esc(x.note)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada laporan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showIssueForm =
+  async id => {
+
+    openModal(
+
+      "Lapor Rusak / Hilang",
+
+      `
+
+        <form id="issueForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Jenis Masalah
+
+              <select
+                name="issueType"
+              >
+
+                <option>
+                  RUSAK
+                </option>
+
+                <option>
+                  HILANG
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+                required
+              ></textarea>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Foto Pendukung
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn warning"
+            >
+              Kirim Laporan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("issueForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "reportIssue",
+            {
+
+              inventoryId: id,
+
+              issueType:
+                f.issueType.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                )
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Laporan berhasil dikirim."
+          );
+
+
+          renderIssues();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+/*************************************************
+ * PENGEMBALIAN
+ *
+ * TEKNISI:
+ * - Ajukan pengembalian
+ * - Lihat status
+ *
+ * SPV GUDANG / ADMIN:
+ * - Verifikasi
+ * - Detail foto
+ * - TERIMA
+ * - REVISI
+ *************************************************/
+
+async function renderReturns(){
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Pengembalian
+        </h2>
+
+        <p class="muted">
+
+          ${
+            session.role === "TEKNISI"
+
+              ? "Ajukan dan pantau pengembalian ALKER."
+
+              : "Verifikasi pengembalian ALKER dari teknisi."
+          }
+
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="returns">
+
+      Memuat...
+
+    </div>
+
+  `;
+
+
+  try{
+
+    /*
+     * ==========================================
+     * TEKNISI
+     * ==========================================
+     */
+
+    if(
+      session.role ===
+      "TEKNISI"
+    ){
+
+      const [
+        invResult,
+        returnResult
+      ] =
+        await Promise.all([
+
+          api(
+            "inventory",
+            {
+              scope:
+                "mine"
+            }
+          ),
+
+          api(
+            "returns",
+            {
+              scope:
+                "mine"
+            }
+          )
+
+        ]);
+
+
+      renderTechnicianReturns_(
+        invResult.data || [],
+        returnResult.data || []
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * ==========================================
+     * SPV GUDANG / ADMIN
+     * ==========================================
+     */
+
+    const r =
+      await api(
+        "returns",
+        {
+          scope:
+            "all"
+        }
+      );
+
+
+    renderWarehouseReturns_(
+      r.data || []
+    );
+
+
+  }catch(err){
+
+    $("returns").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat pengembalian
+        </strong>
+
+        <p class="danger-text">
+          ${esc(
+            err.message
+          )}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+function renderTechnicianReturns_(
+  inventory,
+  returns
+){
+
+  const pending =
+    returns.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
+    );
+
+
+  const revision =
+    returns.filter(
+      x =>
+        x.status ===
+        "REVISI"
+    );
 
 
   /*
-   * ==========================================
-   * AUDIT
-   * ==========================================
+   * Inventory yang masih DIPAKAI
+   * dapat dikembalikan.
    */
 
-  audit_(
-    u,
-    "RETURN_SUBMIT",
-    inv.inventoryId +
-    " -> MENUNGGU VERIFIKASI"
-  );
+  const canReturn =
+    inventory.filter(
+      x =>
+        x.location ===
+          "TEKNISI" &&
+
+        x.holderId ===
+          session.userId &&
+
+        x.status ===
+          "DIPAKAI"
+    );
 
 
-  return ok_({
+  $("returns").innerHTML = `
 
-    returnId:
-      returnId,
+    <div class="grid cards">
 
-    message:
-      "Pengembalian berhasil diajukan dan menunggu verifikasi Gudang."
+      ${metric(
+        "ALKER Saya",
+        inventory.length,
+        "inventory"
+      )}
 
-  });
+      ${metric(
+        "Menunggu Gudang",
+        pending.length,
+        "verifikasi"
+      )}
+
+      ${metric(
+        "Perlu Revisi",
+        revision.length,
+        "pengembalian"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <h3>
+        ALKER yang Dapat Dikembalikan
+      </h3>
+
+      <p class="muted">
+        Pilih ALKER yang benar-benar
+        sudah Anda serahkan ke Gudang.
+      </p>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>ALKER</th>
+              <th>Merk / Type</th>
+              <th>Serial Number</th>
+              <th>Kondisi</th>
+              <th>Status</th>
+              <th>Aksi</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              canReturn
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.brand ||
+                          "-"
+                        )}
+
+                        /
+
+                        ${esc(
+                          x.type ||
+                          "-"
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${badge(
+                          x.condition
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${badge(
+                          x.status
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        <button
+                          class="btn warning"
+                          onclick='showReturnForm(${JSON.stringify(x)})'
+                        >
+                          ↩ Kembalikan
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `<tr>
+
+                <td colspan="6">
+
+                  <div class="empty">
+
+                    Tidak ada ALKER
+                    yang siap dikembalikan.
+
+                  </div>
+
+                </td>
+
+              </tr>`
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <h3>
+        Riwayat Pengembalian
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>Tanggal</th>
+              <th>ALKER</th>
+              <th>Kondisi</th>
+              <th>Status</th>
+              <th>Keterangan</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              returns
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+                      <td>
+                        ${returnStatusBadge_(
+                          x.status
+                        )}
+                      </td>
+
+                      <td>
+
+                        ${
+                          x.status ===
+                          "REVISI"
+
+                            ? `
+                              <span class="danger-text">
+                                ${esc(
+                                  x.reviewNote ||
+                                  "Mohon perbaiki."
+                                )}
+                              </span>
+                            `
+
+                            : esc(
+                                x.reviewNote ||
+                                x.note ||
+                                "-"
+                              )
+                        }
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `<tr>
+
+                <td colspan="5">
+
+                  <div class="empty">
+                    Belum ada riwayat pengembalian.
+                  </div>
+
+                </td>
+
+              </tr>`
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
 
 }
 /*************************************************
+ * SPV GUDANG
  * VERIFIKASI PENGEMBALIAN
- *
- * SPV GUDANG / ADMIN
- *
- * APPROVE:
- * INVENTORY -> GUDANG / READY
- *
- * REVISION:
- * INVENTORY -> kembali DIPAKAI
  *************************************************/
 
-function returnDecision_(u,p){
+function renderWarehouseReturns_(
+  returns
+){
 
-  requireRole_(
-    u,
-    [
-      "SPV_GUDANG",
-      "ADMIN"
-    ]
-  );
-
-  ensureReturnsSheet_();
-
-
-  const returnId =
-    String(
-      p.returnId || ""
-    ).trim();
-
-
-  if(!returnId){
-
-    throw new Error(
-      "ID pengembalian tidak ditemukan."
-    );
-
-  }
-
-
-  const ret =
-    rows_("RETURNS")
-      .find(
-        x =>
-          x.returnId ===
-          returnId
-      );
-
-
-  if(!ret){
-
-    throw new Error(
-      "Data pengembalian tidak ditemukan."
-    );
-
-  }
-
-
-  if(
-    ret.status !==
-    "MENUNGGU VERIFIKASI"
-  ){
-
-    throw new Error(
-      "Pengembalian ini sudah diproses."
-    );
-
-  }
-
-
-  const inv =
-    rows_("INVENTORY")
-      .find(
-        x =>
-          x.inventoryId ===
-          ret.inventoryId
-      );
-
-
-  if(!inv){
-
-    throw new Error(
-      "Inventory asal tidak ditemukan."
-    );
-
-  }
-
-
-  const decision =
-    String(
-      p.decision || ""
-    )
-      .trim()
-      .toUpperCase();
-
-
-  /*
-   * ==========================================
-   * TERIMA
-   * ==========================================
-   */
-
-  if(
-    decision ===
-    "APPROVE"
-  ){
-
-    updateById_(
-      "INVENTORY",
-      "inventoryId",
-      inv.inventoryId,
-      {
-
-        location:
-          "GUDANG",
-
-        loker:
-          "GUDANG",
-
-        holderId:
-          "",
-
-        holder:
-          "",
-
-        status:
-          "READY",
-
-        condition:
-          ret.condition ||
-          inv.condition,
-
-        updatedAt:
-          now_()
-
-      }
+  const pending =
+    returns.filter(
+      x =>
+        x.status ===
+        "MENUNGGU VERIFIKASI"
     );
 
 
-    updateById_(
-      "RETURNS",
-      "returnId",
-      ret.returnId,
-      {
-
-        status:
-          "DITERIMA GUDANG",
-
-        reviewNote:
-          p.note ||
-          "Diterima Gudang.",
-
-        reviewedAt:
-          now_(),
-
-        reviewedBy:
-          u.name,
-
-        actor:
-          u.name
-
-      }
+  const approved =
+    returns.filter(
+      x =>
+        x.status ===
+        "DITERIMA GUDANG"
     );
 
 
-    audit_(
-      u,
-      "RETURN_APPROVE",
-      inv.inventoryId +
-      " -> GUDANG"
+  const revision =
+    returns.filter(
+      x =>
+        x.status ===
+        "REVISI"
     );
 
 
-    return ok_({
+  $("returns").innerHTML = `
 
-      message:
-        "Pengembalian diterima. ALKER kembali menjadi stok Gudang."
+    <!-- ==============================
+         RINGKASAN
+    =============================== -->
 
-    });
+    <div class="grid cards">
 
-  }
+      ${metric(
+        "Menunggu Verifikasi",
+        pending.length,
+        "perlu diperiksa"
+      )}
 
+      ${metric(
+        "Diterima Gudang",
+        approved.length,
+        "sudah kembali"
+      )}
 
-  /*
-   * ==========================================
-   * REVISI
-   * ==========================================
-   */
+      ${metric(
+        "Revisi",
+        revision.length,
+        "dikembalikan ke teknisi"
+      )}
 
-  if(
-    decision ===
-    "REVISION"
-  ){
-
-    const note =
-      String(
-        p.note || ""
-      ).trim();
-
-
-    if(!note){
-
-      throw new Error(
-        "Alasan revisi wajib diisi."
-      );
-
-    }
+    </div>
 
 
-    updateById_(
-      "INVENTORY",
-      "inventoryId",
-      inv.inventoryId,
-      {
-
-        status:
-          "DIPAKAI",
-
-        updatedAt:
-          now_()
-
-      }
-    );
+    <div style="height:15px"></div>
 
 
-    updateById_(
-      "RETURNS",
-      "returnId",
-      ret.returnId,
-      {
+    <!-- ==============================
+         MENUNGGU VERIFIKASI
+    =============================== -->
 
-        status:
-          "REVISI",
+    <div class="card">
 
-        reviewNote:
-          note,
+      <div class="section-head">
 
-        reviewedAt:
-          now_(),
+        <div>
 
-        reviewedBy:
-          u.name,
+          <h3>
+            Menunggu Verifikasi
+          </h3>
 
-        actor:
-          u.name
+          <p class="muted">
+            Periksa kondisi dan foto sebelum
+            ALKER dikembalikan menjadi stok Gudang.
+          </p>
 
-      }
-    );
+        </div>
 
-
-    audit_(
-      u,
-      "RETURN_REVISION",
-      inv.inventoryId +
-      " -> TEKNISI"
-    );
+      </div>
 
 
-    return ok_({
+      <div class="table-wrap">
 
-      message:
-        "Pengembalian dikembalikan ke teknisi untuk diperbaiki."
+        <table class="table">
 
-    });
+          <thead>
 
-  }
+            <tr>
+
+              <th>Tanggal</th>
+
+              <th>Teknisi</th>
+
+              <th>Loker</th>
+
+              <th>ALKER</th>
+
+              <th>Serial Number</th>
+
+              <th>Kondisi</th>
+
+              <th>Aksi</th>
+
+            </tr>
+
+          </thead>
 
 
-  throw new Error(
-    "Keputusan pengembalian tidak dikenal."
-  );
+          <tbody>
+
+            ${
+              pending
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.technician
+                          )}
+                        </strong>
+
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.loker
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.inventoryId
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.serialNumber ||
+                          "-"
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <button
+                          class="btn secondary"
+                          onclick='showReturnVerificationDetail(${JSON.stringify(x)})'
+                        >
+                          Detail / Foto
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="7">
+
+                    <div class="empty">
+
+                      Tidak ada pengembalian
+                      yang menunggu verifikasi.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==============================
+         RIWAYAT
+    =============================== -->
+
+    <div class="card">
+
+      <h3>
+        Riwayat Verifikasi
+      </h3>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>Tanggal</th>
+
+              <th>Teknisi</th>
+
+              <th>ALKER</th>
+
+              <th>Kondisi</th>
+
+              <th>Status</th>
+
+              <th>Catatan</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              returns
+                .filter(
+                  x =>
+                    x.status !==
+                    "MENUNGGU VERIFIKASI"
+                )
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+                        ${esc(
+                          x.date
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${esc(
+                          x.technician
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+                          ${esc(
+                            x.inventoryId
+                          )}
+                        </div>
+
+                      </td>
+
+
+                      <td>
+                        ${badge(
+                          x.condition
+                        )}
+                      </td>
+
+
+                      <td>
+                        ${returnStatusBadge_(
+                          x.status
+                        )}
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.reviewNote ||
+                          x.note ||
+                          "-"
+                        )}
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("")
+
+              ||
+
+              `
+
+                <tr>
+
+                  <td colspan="6">
+
+                    <div class="empty">
+
+                      Belum ada riwayat verifikasi.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
 
 }
-// Add demo technicians from USERS if TEKNISI sheet is empty.
-function ensureTechnicianMirror_(){
-  if(rows_("TEKNISI").length===0){
-    rows_("USERS").filter(x=>x.role==="TEKNISI").forEach(x=>append_("TEKNISI",{technicianId:x.userId,name:x.name,username:x.username,loker:x.loker,phone:"",status:"AKTIF",createdAt:x.createdAt}));
-  }
-}
-
-function repairUsersPasswordHash() {
-  const sh = sheet_("USERS");
-  if (!sh) throw new Error("Sheet USERS tidak ditemukan.");
-
-  const users = [
-    ["admin", "admin123"],
-    ["gudang", "gudang123"],
-    ["leader", "leader123"],
-    ["teknisi", "teknisi123"]
-  ];
-
-  const values = sh.getDataRange().getValues();
-  const headers = HEADERS.USERS;
-  const usernameCol = headers.indexOf("username");
-  const hashCol = headers.indexOf("passwordHash");
-
-  if (usernameCol < 0 || hashCol < 0) {
-    throw new Error("Kolom username/passwordHash tidak ditemukan.");
-  }
-
-  let updated = 0;
-
-  for (let i = 1; i < values.length; i++) {
-    const username = String(values[i][usernameCol] || "").trim().toLowerCase();
-
-    const found = users.find(x => x[0] === username);
-
-    if (found) {
-      sh.getRange(i + 1, hashCol + 1).setValue(hash_(found[1]));
-      updated++;
-    }
-  }
-
-  SpreadsheetApp.flush();
-
-  Logger.log("Password hash berhasil diperbaiki: " + updated + " akun.");
-}
-
 /*************************************************
- * PHOTO PREVIEW
- *
- * Foto tetap PRIVATE di Google Drive.
- * Browser tidak membuka Google Drive langsung.
+ * DETAIL VERIFIKASI PENGEMBALIAN
  *************************************************/
 
-function photoPreview_(u,p){
+window.showReturnVerificationDetail =
+  async x => {
 
-  if(!u || !u.userId){
+    if(!x){
+      toast(
+        "Data pengembalian tidak ditemukan."
+      );
+      return;
+    }
 
-    throw new Error(
-      "Sesi pengguna tidak valid."
+
+    openModal(
+
+      "Verifikasi Pengembalian",
+
+      `
+
+        <div class="detail-grid">
+
+          ${[
+            [
+              "ID Pengembalian",
+              x.returnId
+            ],
+
+            [
+              "Inventory ID",
+              x.inventoryId
+            ],
+
+            [
+              "Teknisi",
+              x.technician
+            ],
+
+            [
+              "Loker",
+              x.loker
+            ],
+
+            [
+              "ALKER",
+              x.itemName
+            ],
+
+            [
+              "Serial Number",
+              x.serialNumber
+            ],
+
+            [
+              "Kondisi Kembali",
+              x.condition
+            ],
+
+            [
+              "Tanggal",
+              x.date
+            ],
+
+            [
+              "Status",
+              x.status
+            ]
+
+          ]
+            .map(
+              a => `
+
+                <div class="detail-box">
+
+                  <span>
+                    ${esc(a[0])}
+                  </span>
+
+                  <strong>
+                    ${esc(
+                      a[1] || "-"
+                    )}
+                  </strong>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+
+        ${
+          x.note
+
+            ? `
+
+              <div
+                class="card"
+                style="margin-top:15px"
+              >
+
+                <strong>
+                  Catatan Teknisi
+                </strong>
+
+                <p>
+                  ${esc(
+                    x.note
+                  )}
+                </p>
+
+              </div>
+
+            `
+
+            : ""
+        }
+
+
+        <div
+          id="returnPhotoArea"
+          style="margin-top:18px"
+        >
+
+          <div class="empty">
+
+            Memuat foto...
+
+          </div>
+
+        </div>
+
+
+        ${
+          x.status ===
+          "MENUNGGU VERIFIKASI"
+
+            ? `
+
+              <div
+                class="actions"
+                style="
+                  margin-top:20px;
+                  justify-content:flex-end;
+                "
+              >
+
+                <button
+                  class="btn warning"
+                  onclick="
+                    returnDecision(
+                      '${esc(x.returnId)}',
+                      'REVISION'
+                    )
+                  "
+                >
+                  ❌ Revisi
+                </button>
+
+
+                <button
+                  class="btn success"
+                  onclick="
+                    returnDecision(
+                      '${esc(x.returnId)}',
+                      'APPROVE'
+                    )
+                  "
+                >
+                  ✅ Terima
+                </button>
+
+              </div>
+
+            `
+
+            : `
+
+              <div
+                class="card"
+                style="margin-top:15px"
+              >
+
+                ${
+                  returnStatusBadge_(
+                    x.status
+                  )
+                }
+
+                ${
+                  x.reviewNote
+                    ? `
+                      <p
+                        class="muted"
+                        style="margin-top:8px"
+                      >
+                        ${esc(
+                          x.reviewNote
+                        )}
+                      </p>
+                    `
+                    : ""
+                }
+
+              </div>
+
+            `
+
+        }
+
+      `
+
     );
 
-  }
+
+    const photos = [];
 
 
-  const photoUrl =
-    String(
-      p.photoUrl || ""
-    ).trim();
+    /*
+     * FOTO ALKER SAAT PENGEMBALIAN
+     */
+
+    if(
+      x.photoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
+        );
 
 
-  if(!photoUrl){
+      if(dataUrl){
 
-    throw new Error(
-      "Foto tidak ditemukan."
+        photos.push(
+          photoBox_(
+            "Foto Saat Dikembalikan",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+     * FOTO SERIAL SAAT PENGEMBALIAN
+     */
+
+    if(
+      x.serialPhotoUrl
+    ){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
+
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Serial Saat Dikembalikan",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+     * FOTO ASAL INVENTORY
+     *
+     * Ambil dari inventory asal.
+     */
+
+    try{
+
+      const invResult =
+        await api(
+          "inventory",
+          {
+            scope:
+              "all"
+          }
+        );
+
+
+      const inv =
+        (invResult.data || [])
+          .find(
+            i =>
+              i.inventoryId ===
+              x.inventoryId
+          );
+
+
+      if(inv){
+
+        if(
+          inv.photoUrl
+        ){
+
+          const dataUrl =
+            await loadPhotoPreview_(
+              inv.photoUrl
+            );
+
+
+          if(dataUrl){
+
+            photos.unshift(
+              photoBox_(
+                "Foto ALKER Saat Diberikan",
+                dataUrl
+              )
+            );
+
+          }
+
+        }
+
+
+        if(
+          inv.serialPhotoUrl
+        ){
+
+          const dataUrl =
+            await loadPhotoPreview_(
+              inv.serialPhotoUrl
+            );
+
+
+          if(dataUrl){
+
+            photos.unshift(
+              photoBox_(
+                "Foto Serial Saat Diberikan",
+                dataUrl
+              )
+            );
+
+          }
+
+        }
+
+      }
+
+    }catch(err){
+
+      console.warn(
+        "Foto inventory awal gagal dimuat:",
+        err.message
+      );
+
+    }
+
+
+    const area =
+      $("returnPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
+
+          ? `
+
+            <div class="photo-grid">
+
+              ${photos.join("")}
+
+            </div>
+
+          `
+
+          : `
+
+            <div class="photo-empty">
+
+              Foto tidak tersedia.
+
+            </div>
+
+          `;
+
+    }
+
+  };
+  
+  /*************************************************
+ * KEPUTUSAN SPV
+ * TERIMA / REVISI
+ *************************************************/
+
+window.returnDecision =
+  async (
+    returnId,
+    decision
+  ) => {
+
+    if(!returnId){
+
+      toast(
+        "ID pengembalian tidak ditemukan."
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * ==========================================
+     * TERIMA
+     * ==========================================
+     */
+
+    if(
+      decision ===
+      "APPROVE"
+    ){
+
+      const yakin =
+        confirm(
+          "Terima pengembalian ALKER ini?\n\n" +
+          "ALKER akan dipindahkan kembali " +
+          "ke stok Gudang."
+        );
+
+
+      if(!yakin){
+        return;
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "returnDecision",
+            {
+
+              returnId:
+                returnId,
+
+              decision:
+                "APPROVE",
+
+              note:
+                "Diterima Gudang."
+
+            }
+          );
+
+
+        closeModal();
+
+
+        toast(
+          r.data?.message ||
+          "Pengembalian diterima."
+        );
+
+
+        await renderReturns();
+
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal menerima pengembalian."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    /*
+     * ==========================================
+     * REVISI
+     * ==========================================
+     */
+
+    if(
+      decision ===
+      "REVISION"
+    ){
+
+      const note =
+        prompt(
+          "Masukkan alasan revisi pengembalian:"
+        );
+
+
+      if(
+        note ===
+        null
+      ){
+
+        return;
+
+      }
+
+
+      if(
+        !note.trim()
+      ){
+
+        toast(
+          "Alasan revisi wajib diisi."
+        );
+
+        return;
+
+      }
+
+
+      try{
+
+        const r =
+          await api(
+            "returnDecision",
+            {
+
+              returnId:
+                returnId,
+
+              decision:
+                "REVISION",
+
+              note:
+                note.trim()
+
+            }
+          );
+
+
+        closeModal();
+
+
+        toast(
+          r.data?.message ||
+          "Pengembalian dikembalikan ke teknisi."
+        );
+
+
+        await renderReturns();
+
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal mengirim revisi."
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    toast(
+      "Keputusan tidak dikenal."
     );
 
-  }
+  };
+  
+  /*************************************************
+ * STATUS PENGEMBALIAN
+ *************************************************/
 
-
-  const fileId =
-    extractDriveFileId_(
-      photoUrl
-    );
-
-
-  if(!fileId){
-
-    throw new Error(
-      "ID file foto tidak valid."
-    );
-
-  }
-
-
-  const file =
-    DriveApp.getFileById(
-      fileId
-    );
-
-
-  const blob =
-    file.getBlob();
-
-
-  const contentType =
-    blob.getContentType();
-
-
-  const base64 =
-    Utilities.base64Encode(
-      blob.getBytes()
-    );
-
-
-  return ok_({
-
-    fileId:
-      fileId,
-
-    name:
-      file.getName(),
-
-    mimeType:
-      contentType,
-
-    dataUrl:
-      "data:" +
-      contentType +
-      ";base64," +
-      base64
-
-  });
-
-}
-function extractDriveFileId_(url){
+function returnStatusBadge_(
+  status
+){
 
   const s =
     String(
-      url || ""
-    ).trim();
+      status || ""
+    ).toUpperCase();
 
 
-  if(!s){
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "DITERIMA GUDANG"
+  ){
+
+    return `
+      <span class="badge green">
+        DITERIMA GUDANG
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s ===
+    "REVISI"
+  ){
+
+    return `
+      <span class="badge red">
+        REVISI
+      </span>
+    `;
+
+  }
+
+
+  return badge(
+    status ||
+    "-"
+  );
+
+}
+
+/*************************************************
+ * TEAM — TEKNISI SAYA
+ *************************************************/
+
+async function renderTeam() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          ${
+            session.role === "TEKNISI"
+              ? "Tim Saya"
+              : "Teknisi Loker"
+          }
+        </h2>
+
+        <p class="muted">
+          ${esc(session.loker || "")}
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="teamBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api("technicianTeam");
+
+
+  const d =
+    r.data || {};
+
+
+  /*
+   * TEKNISI
+   */
+  if (session.role === "TEKNISI") {
+
+    const team =
+      d.team;
+
+
+    if (!team) {
+
+      $("teamBody").innerHTML = `
+
+        <div class="card">
+
+          <h3>
+            Belum ada Tim
+          </h3>
+
+          <p class="muted">
+            Anda belum dimasukkan ke
+            Tim Teknisi.
+          </p>
+
+        </div>
+
+      `;
+
+      return;
+    }
+
+
+    $("teamBody").innerHTML = `
+
+      <div class="grid two">
+
+
+        <div class="card">
+
+          <div class="section-head">
+
+            <div>
+
+              <h3>
+                Teknisi Utama
+              </h3>
+
+              <p class="muted">
+                ${esc(team.loker)}
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div class="detail-box">
+
+            <span>
+              Nama
+            </span>
+
+            <strong>
+              ${esc(team.technicianName)}
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <div class="card">
+
+          <h3>
+            Teknisi 2 / Partner
+          </h3>
+
+          <div class="detail-box">
+
+            <span>
+              Nama
+            </span>
+
+            <strong>
+              ${
+                esc(
+                  team.partnerName ||
+                  "Tidak ada partner"
+                )
+              }
+            </strong>
+
+          </div>
+
+        </div>
+
+
+      </div>
+
+    `;
+
+    return;
+  }
+
+
+  /*
+   * LEADER / ADMIN / SPV
+   */
+  const teams =
+    d.teams || [];
+
+
+  $("teamBody").innerHTML = `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tim</th>
+            <th>Loker</th>
+            <th>Teknisi Utama</th>
+            <th>Partner</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            teams
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.teamId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ${esc(x.technicianName)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${
+                        esc(
+                          x.partnerName ||
+                          "-"
+                        )
+                      }
+                    </td>
+
+                    <td>
+                      ${badge("AKTIF")}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="5">
+
+                <div class="empty">
+                  Belum ada tim.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * KELOLA TIM
+ *************************************************/
+
+async function renderTeamManage() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Kelola Tim Teknisi
+        </h2>
+
+        <p class="muted">
+          Atur Teknisi Utama dan Teknisi 2 /
+          Partner berdasarkan loker.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showTeamForm()"
+      >
+        + Buat Tim
+      </button>
+
+    </div>
+
+
+    <div id="teamManageBody">
+      Memuat...
+    </div>
+
+  `;
+
+
+  const r =
+    await api(
+      "technicianTeam"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  const teams =
+    d.teams || [];
+
+
+  $("teamManageBody").innerHTML = `
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Tim",
+        teams.length,
+        "tim aktif"
+      )}
+
+      ${metric(
+        "Teknisi",
+        (d.technicians || []).length,
+        "teknisi aktif"
+      )}
+
+      ${metric(
+        "Dengan Partner",
+        teams.filter(
+          x => x.partnerId
+        ).length,
+        "tim"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tim</th>
+            <th>Loker</th>
+            <th>Teknisi Utama</th>
+            <th>Partner</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            teams
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      <strong>
+                        ${esc(x.teamId)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technicianName)}
+                    </td>
+
+                    <td>
+                      ${
+                        esc(
+                          x.partnerName ||
+                          "-"
+                        )
+                      }
+                    </td>
+
+                   <td>
+
+					<div class="actions">
+
+					<button
+					class="btn secondary"
+					onclick='editTeam(${JSON.stringify(x)})'
+						>
+					Edit
+					</button>
+
+					<button
+					  class="btn danger"
+					  onclick="disableTeam('${esc(x.teamId)}')"
+					>
+					  Nonaktifkan
+					</button>
+
+					<span class="badge green">
+					  AKTIF
+					</span>
+
+				  </div>
+
+				</td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="5">
+
+                <div class="empty">
+                  Belum ada tim.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * TEAM FORM
+ *************************************************/
+
+window.showTeamForm =
+  async () => {
+
+    await openTeamEditor();
+  };
+
+
+window.editTeam =
+  async team => {
+
+    await openTeamEditor(team);
+  };
+
+
+async function openTeamEditor(existing = null) {
+
+  const r = await api("technicianTeam");
+
+  const d = r.data || {};
+
+  const technicians = d.technicians || [];
+
+  /*
+   * ==========================================
+   * LOKER OPERASIONAL
+   * ==========================================
+   */
+
+  const OPERATIONAL_LOKERS = [
+    "IOAN / ASSURANCE",
+    "PSB / FULFILLMENT",
+    "MAINTENANCE / OSP"
+  ];
+
+
+  /*
+   * ==========================================
+   * LOKER TERPILIH
+   * ==========================================
+   */
+
+  const selectedLoker =
+    existing?.loker ||
+    (
+      session.role === "LEADER"
+        ? OPERATIONAL_LOKERS[0]
+        : session.loker
+    );
+
+
+  /*
+   * ==========================================
+   * TEKNISI SESUAI LOKER
+   * ==========================================
+   */
+
+  const available =
+    technicians.filter(
+      x =>
+        x.loker === selectedLoker
+    );
+
+
+  openModal(
+
+    existing
+      ? "Edit Tim Teknisi"
+      : "Buat Tim Teknisi",
+
+    `
+
+      <form id="teamForm">
+
+        <div class="form-grid">
+
+          <label>
+
+            Loker
+
+            <select
+              name="loker"
+              id="teamLoker"
+              required
+            >
+
+              ${
+                session.role === "LEADER"
+
+                  ? OPERATIONAL_LOKERS
+                      .map(
+                        x => `
+
+                          <option
+                            value="${esc(x)}"
+                            ${
+                              x === selectedLoker
+                                ? "selected"
+                                : ""
+                            }
+                          >
+                            ${esc(x)}
+                          </option>
+
+                        `
+                      )
+                      .join("")
+
+                  : `
+
+                      <option
+                        value="${esc(session.loker)}"
+                        selected
+                      >
+                        ${esc(session.loker)}
+                      </option>
+
+                    `
+              }
+
+            </select>
+
+          </label>
+
+
+          <label>
+
+            Teknisi Utama
+
+            <select
+              name="technicianId"
+              id="teamTechnician"
+              required
+            >
+
+              ${
+                available
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.userId)}"
+                        ${
+                          x.userId ===
+                          existing?.technicianId
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${esc(x.name)}
+                      </option>
+
+                    `
+                  )
+                  .join("")
+              }
+
+            </select>
+
+          </label>
+
+
+          <label>
+
+            Teknisi 2 / Partner
+
+            <select
+              name="partnerId"
+              id="teamPartner"
+            >
+
+              <option value="">
+                -- Tidak ada partner --
+              </option>
+
+              ${
+                available
+                  .map(
+                    x => `
+
+                      <option
+                        value="${esc(x.userId)}"
+                        ${
+                          x.userId ===
+                          existing?.partnerId
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${esc(x.name)}
+                      </option>
+
+                    `
+                  )
+                  .join("")
+              }
+
+            </select>
+
+          </label>
+
+        </div>
+
+
+        <div
+          class="card"
+          style="margin-top:15px"
+        >
+
+          <p class="muted">
+
+            Teknisi 1 wajib memiliki
+            ALKER resmi.
+
+            Teknisi 2 / Partner tidak wajib
+            memiliki ALKER.
+
+            Partner harus berasal dari
+            loker/divisi yang sama.
+
+            Satu teknisi tidak boleh berada
+            pada dua tim aktif.
+
+          </p>
+
+        </div>
+
+
+        <div
+          class="actions"
+          style="margin-top:15px"
+        >
+
+          <button
+            type="button"
+            class="btn secondary"
+            onclick="closeModal()"
+          >
+            Batal
+          </button>
+
+          <button
+            type="submit"
+            class="btn primary"
+          >
+            ${
+              existing
+                ? "Simpan Perubahan"
+                : "Simpan Tim"
+            }
+          </button>
+
+        </div>
+
+      </form>
+
+    `
+  );
+
+
+  const lokerSelect =
+    $("teamLoker");
+
+  const techSelect =
+    $("teamTechnician");
+
+  const partnerSelect =
+    $("teamPartner");
+
+
+  /*
+   * ==========================================
+   * LOAD TEKNISI SESUAI LOKER
+   * ==========================================
+   */
+
+  async function reloadTechnicians() {
+
+    const selectedTech =
+      techSelect.value;
+
+    const selectedPartner =
+      partnerSelect.value;
+
+
+    const fresh =
+      await api(
+        "technicianTeam"
+      );
+
+
+    const list =
+      (fresh.data?.technicians || [])
+        .filter(
+          x =>
+            x.loker ===
+            lokerSelect.value
+        );
+
+
+    techSelect.innerHTML =
+      list
+        .map(
+          x => `
+
+            <option
+              value="${esc(x.userId)}"
+            >
+              ${esc(x.name)}
+            </option>
+
+          `
+        )
+        .join("");
+
+
+    partnerSelect.innerHTML = `
+
+      <option value="">
+        -- Tidak ada partner --
+      </option>
+
+      ${
+        list
+          .map(
+            x => `
+
+              <option
+                value="${esc(x.userId)}"
+              >
+                ${esc(x.name)}
+              </option>
+
+            `
+          )
+          .join("")
+      }
+
+    `;
+
+
+    if(
+      list.some(
+        x =>
+          x.userId ===
+          selectedTech
+      )
+    ){
+
+      techSelect.value =
+        selectedTech;
+
+    }
+
+
+    if(
+      list.some(
+        x =>
+          x.userId ===
+          selectedPartner
+      )
+    ){
+
+      partnerSelect.value =
+        selectedPartner;
+
+    }
+
+
+    techSelect.onchange();
+
+  }
+
+
+  /*
+   * GANTI LOKER
+   */
+
+  lokerSelect.onchange =
+    async () => {
+
+      await reloadTechnicians();
+
+    };
+
+
+  /*
+   * TEKNISI UTAMA
+   */
+
+  techSelect.onchange =
+    () => {
+
+      if(
+        partnerSelect.value ===
+        techSelect.value
+      ){
+
+        partnerSelect.value = "";
+
+      }
+
+
+      [
+        ...partnerSelect.options
+      ].forEach(
+        option => {
+
+          option.disabled =
+            option.value &&
+            option.value ===
+              techSelect.value;
+
+        }
+      );
+
+    };
+
+
+  /*
+   * SUBMIT TEAM
+   */
+
+  $("teamForm").onsubmit =
+    async e => {
+
+      e.preventDefault();
+
+
+      const technicianId =
+        techSelect.value;
+
+      const partnerId =
+        partnerSelect.value;
+
+
+      if(!technicianId){
+
+        toast(
+          "Teknisi utama wajib dipilih."
+        );
+
+        return;
+
+      }
+
+
+      if(
+        partnerId &&
+        partnerId === technicianId
+      ){
+
+        toast(
+          "Teknisi utama dan partner tidak boleh sama."
+        );
+
+        return;
+
+      }
+
+
+      try{
+
+        await api(
+          "saveTechnicianTeam",
+          {
+
+            teamId:
+              existing?.teamId || "",
+
+            technicianId,
+
+            partnerId
+
+          }
+        );
+
+
+        closeModal();
+
+
+        toast(
+          existing
+            ? "Tim berhasil diperbarui."
+            : "Tim berhasil dibuat."
+        );
+
+
+        if (typeof renderTeamManage === "function") {
+          await renderTeamManage();
+        }
+
+      }catch(err){
+
+        toast(
+          err.message ||
+          "Gagal menyimpan tim."
+        );
+
+      }
+
+    };
+
+
+  /*
+   * LOAD AWAL
+   */
+
+  await reloadTechnicians();
+
+}
+
+/*************************************************
+ * NONAKTIFKAN TIM
+ *************************************************/
+
+window.disableTeam = async teamId => {
+
+  if (!teamId) {
+    toast("ID tim tidak ditemukan.");
+    return;
+  }
+
+  const yakin = confirm(
+    "Nonaktifkan tim ini?\n\n" +
+    "Tim tidak akan dihapus dari histori, " +
+    "tetapi tidak lagi menjadi tim aktif."
+  );
+
+  if (!yakin) {
+    return;
+  }
+
+  try {
+
+    await api(
+      "deleteTechnicianTeam",
+      {
+        teamId: teamId
+      }
+    );
+
+    toast(
+      "Tim berhasil dinonaktifkan."
+    );
+
+    await renderTeamManage();
+
+  } catch (err) {
+
+    toast(
+      err.message ||
+      "Gagal menonaktifkan tim."
+    );
+
+  }
+
+};
+
+/*
+ * Nonaktifkan tim belum diaktifkan pada CHECKPOINT 3.2C
+ * karena endpoint deleteTechnicianTeam belum menjadi bagian
+ * dari kontrak backend yang sedang kita pakai.
+ */
+
+/*************************************************
+ * LEADER TEAM
+ *************************************************/
+
+async function renderLeaderInventory() {
+  const r = await api("inventory", { scope: "leaderOwn" });
+  const data = r.data || [];
+  $("page").innerHTML = `
+    <div class="page-head">
+      <div>
+        <h2>ALKER Leader</h2>
+        <p class="muted">ALKER yang menjadi tanggung jawab Leader ${esc(session.name || "")}. Data ini terpisah dari Inventory Loker teknisi.</p>
+      </div>
+      <button class="btn primary" onclick="showLeaderOwnInventoryForm()">+ Input ALKER Leader</button>
+    </div>
+    <div id="leaderOwnInventory"></div>`;
+  renderInventoryTable($("leaderOwnInventory"), data, "leaderOwn");
+}
+
+window.showLeaderOwnInventoryForm = async () => {
+  try {
+    const mr = await api("masters");
+    const items = mr.data?.items || [];
+    if (!items.length) { toast("Master ALKER aktif belum tersedia."); return; }
+    openModal("Input ALKER Leader", `
+      <p class="muted">ALKER dicatat atas nama Leader yang sedang login, bukan ke teknisi. Harga otomatis mengikuti Master Harga.</p>
+      <form id="leaderOwnForm">
+        <div class="form-grid">
+          <label>ALKER<select name="itemId" id="leaderOwnItemId" required><option value="">-- Pilih ALKER --</option>${items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}</select></label>
+          <label>Merk<div id="leaderOwnBrandWrap"><input name="brand" id="leaderOwnBrand" placeholder="Merk"></div></label>
+          <label>Type / Model<input name="type" placeholder="Type / model"></label>
+          <label>Serial Number<input name="serialNumber" required placeholder="Serial Number"></label>
+          <label>Kondisi<select name="condition" required><option value="BAIK">BAIK</option><option value="RUSAK RINGAN">RUSAK RINGAN</option><option value="RUSAK BERAT">RUSAK BERAT</option></select></label>
+          <label>Foto ALKER<input name="photo" id="leaderOwnPhoto" type="file" accept="image/*" capture="environment" required></label>
+          <label>Foto Serial / Label<input name="serialPhoto" id="leaderOwnSerialPhoto" type="file" accept="image/*" capture="environment"></label>
+          <label class="full-col">Keterangan<textarea name="note" placeholder="Keterangan jika diperlukan..."></textarea></label>
+        </div>
+        <div class="card" style="margin-top:15px"><strong>Harga</strong><div class="muted" style="margin-top:5px">Harga tidak dapat diinput manual dan diambil otomatis dari Master Harga.</div></div>
+        <div class="actions" style="margin-top:15px"><button type="button" class="btn secondary" onclick="closeModal()">Batal</button><button type="submit" class="btn primary" id="leaderOwnSubmit">Simpan ALKER</button></div>
+      </form>`);
+    const itemSelect = $("leaderOwnItemId"), brandWrap = $("leaderOwnBrandWrap");
+    function refreshBrand() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      if (String(item?.itemName || "").trim().toLowerCase() === "splicer") {
+        const brands = ["Sumitomo","Jointwit","Fujikura","INO","ADV","TUMTEC"];
+        brandWrap.innerHTML = `<select name="brand" id="leaderOwnBrand" required><option value="">-- Pilih Merk Splicer --</option>${brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select>`;
+      } else brandWrap.innerHTML = `<input name="brand" id="leaderOwnBrand" placeholder="Merk">`;
+    }
+    function applyLeaderOwnPhotoMode() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const gallery = String(item?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("leaderOwnPhoto"), $("leaderOwnSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    }
+    itemSelect.onchange = () => { refreshBrand(); applyLeaderOwnPhotoMode(); };
+    refreshBrand(); applyLeaderOwnPhotoMode();
+    $("leaderOwnForm").onsubmit = async e => {
+      e.preventDefault(); const btn = $("leaderOwnSubmit"); if (btn.disabled) return;
+      btn.disabled = true; btn.textContent = "Menyimpan...";
+      try {
+        const fd = new FormData(e.target), photo = $("leaderOwnPhoto")?.files?.[0] || null, serialPhoto = $("leaderOwnSerialPhoto")?.files?.[0] || null;
+        const payload = {itemId:fd.get("itemId"),brand:fd.get("brand")||"",type:fd.get("type")||"",serialNumber:fd.get("serialNumber")||"",condition:fd.get("condition")||"BAIK",note:fd.get("note")||"",photo:photo?await fileToBase64(photo):"",serialPhoto:serialPhoto?await fileToBase64(serialPhoto):""};
+        const result = await api("leaderOwnInventoryAdd", payload);
+        toast(result.data?.message || "ALKER Leader berhasil disimpan."); closeModal(); await renderLeaderInventory();
+      } catch (err) { toast(err.message || "Gagal menyimpan ALKER Leader."); btn.disabled = false; btn.textContent = "Simpan ALKER"; }
+    };
+  } catch (err) { toast(err.message || "Gagal membuka form ALKER Leader."); }
+};
+
+async function renderLeaderIssues() {
+  $("page").innerHTML = `<div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Pantau teknisi yang berada di bawah Leader ${esc(session.name || "")}, termasuk siapa yang sudah dan belum input ALKER.</p></div></div><div id="leaderReports" class="card">Memuat laporan teknisi...</div>`;
+  try {
+    const r = await api("leaderInitialReports");
+    const data = r.data || [];
+    const submittedCount = data.filter(x => String(x.inputStatus || "SUDAH INPUT ALKER").toUpperCase() === "SUDAH INPUT ALKER").length;
+    const pendingCount = data.filter(x => String(x.inputStatus || "").toUpperCase() === "BELUM INPUT ALKER").length;
+    $("leaderReports").innerHTML = `<div class="stats-grid" style="margin-bottom:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><div class="stat-card"><div class="stat-label">Sudah Input ALKER</div><div class="stat-value">${submittedCount}</div><div class="muted small">teknisi/laporan</div></div><div class="stat-card"><div class="stat-label">Belum Input ALKER</div><div class="stat-value">${pendingCount}</div><div class="muted small">teknisi</div></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Nama Teknisi</th><th>Loker / Divisi</th><th>Status Input</th><th>Tanggal</th><th>Nama ALKER</th><th>Merk / Type</th><th>Serial Number</th><th>Kondisi</th><th>Status Laporan</th><th>Nilai</th></tr></thead><tbody>
+      ${data.length ? data.map(x => { const inputStatus = String(x.inputStatus || "SUDAH INPUT ALKER").toUpperCase(); const isMissing = inputStatus === "BELUM INPUT ALKER"; return `<tr><td><strong>${esc(x.technician || "-")}</strong></td><td>${esc(x.loker || "-")}</td><td>${badge(inputStatus)}</td><td>${esc(x.date || "-")}</td><td>${esc(x.itemName || "-")}</td><td>${esc(x.brand || "-")} / ${esc(x.type || "-")}</td><td>${esc(x.serialNumber || "-")}</td><td>${badge(x.condition || (isMissing ? "BELUM INPUT" : "BELUM DIVERIFIKASI"))}</td><td>${badge(x.status || (isMissing ? "BELUM INPUT" : "MENUNGGU VERIFIKASI"))}${x.reviewNote ? `<div class="small ${isMissing ? "" : "danger-text"}">${esc(x.reviewNote)}</div>` : ""}</td><td>${money(x.price || 0)}</td></tr>`; }).join("") : `<tr><td colspan="10"><div class="empty">Belum ada teknisi aktif yang ditugaskan kepada Anda. Admin perlu menetapkan Leader Penanggung Jawab pada Master Teknisi.</div></td></tr>`}
+      </tbody></table></div>`;
+  } catch (err) {
+    $("leaderReports").innerHTML = `<div class="danger-text">Gagal memuat laporan: ${esc(err.message || "Terjadi kesalahan")}</div>`;
+  }
+}
+
+async function renderTeamInventory() {
+
+  const r =
+    await api(
+      "inventory",
+      {
+        scope: "loker"
+      }
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Inventory Loker
+        </h2>
+
+        <p class="muted">
+          ${esc(session.loker)}
+        </p>
+
+      </div>
+
+      <button
+        class="btn primary"
+        onclick="showLeaderAddInventory()"
+      >
+        + Input ALKER
+      </button>
+
+    </div>
+
+
+    <div id="teamInv">
+    </div>
+
+  `;
+
+
+  renderInventoryTable(
+    $("teamInv"),
+    r.data || [],
+    "loker"
+  );
+}
+
+
+window.showLeaderAddInventory = async () => {
+
+  try {
+    const [mr, tr] = await Promise.all([
+      api("masters"),
+      api("technicians", { scope: "loker" })
+    ]);
+
+    const items = mr.data?.items || [];
+    const technicians = tr.data || [];
+
+    if (!technicians.length) {
+      toast("Belum ada teknisi aktif di loker ini.");
+      return;
+    }
+
+    openModal(
+      "Input ALKER ke Teknisi",
+      `
+        <p class="muted">
+          ALKER langsung dicatat ke teknisi pada loker
+          <strong>${esc(session.loker || "-")}</strong>.
+          Harga otomatis mengikuti Master Harga.
+        </p>
+
+        <form id="leaderAddInventoryForm">
+          <div class="form-grid">
+
+            <label>
+              Teknisi
+              <select name="technicianId" required>
+                <option value="">-- Pilih Teknisi --</option>
+                ${technicians.map(x => `
+                  <option value="${esc(x.id || x.technicianId || "")}">
+                    ${esc(x.name || "-")}
+                  </option>
+                `).join("")}
+              </select>
+            </label>
+
+            <label>
+              ALKER
+              <select name="itemId" id="leaderItemId" required>
+                <option value="">-- Pilih ALKER --</option>
+                ${items.map(x => `
+                  <option value="${esc(x.itemId)}" data-name="${esc(x.itemName)}">
+                    ${esc(x.itemName)}
+                  </option>
+                `).join("")}
+              </select>
+            </label>
+
+            <label>
+              Merk
+              <div id="leaderBrandWrap">
+                <input name="brand" id="leaderBrand" placeholder="Merk">
+              </div>
+            </label>
+
+            <label>
+              Type
+              <input name="type" id="leaderType" placeholder="Type / model">
+            </label>
+
+            <label>
+              Serial Number
+              <input name="serialNumber" required placeholder="Serial Number">
+            </label>
+
+            <label>
+              Kondisi
+              <select name="condition" required>
+                <option value="BAIK">BAIK</option>
+                <option value="RUSAK RINGAN">RUSAK RINGAN</option>
+                <option value="RUSAK BERAT">RUSAK BERAT</option>
+              </select>
+            </label>
+
+            <label>
+              Foto ALKER
+              <input name="photo" id="leaderPhoto" type="file" accept="image/*" capture="environment" required>
+            </label>
+
+            <label>
+              Foto Serial / Label
+              <input name="serialPhoto" id="leaderSerialPhoto" type="file" accept="image/*" capture="environment">
+            </label>
+
+            <label class="full-col">
+              Keterangan
+              <textarea name="note" placeholder="Keterangan jika diperlukan..."></textarea>
+            </label>
+
+          </div>
+
+          <div class="card" style="margin-top:15px">
+            <strong>Harga</strong>
+            <div class="muted" style="margin-top:5px">Harga tidak dapat diinput Leader dan akan otomatis diambil dari Master Harga setelah disimpan.</div>
+          </div>
+
+          <div class="actions" style="margin-top:15px">
+            <button type="button" class="btn secondary" onclick="closeModal()">Batal</button>
+            <button type="submit" class="btn primary" id="leaderAddInventorySubmit">Simpan ALKER</button>
+          </div>
+        </form>
+      `
+    );
+
+    const itemSelect = $("leaderItemId");
+    const brandWrap = $("leaderBrandWrap");
+
+    function refreshLeaderBrand() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const isSplicer = String(item?.itemName || "").trim().toLowerCase() === "splicer";
+
+      if (isSplicer) {
+        const brands = ["Sumitomo","Jointwit","Fujikura","INO","ADV","TUMTEC"];
+        brandWrap.innerHTML = `
+          <select name="brand" id="leaderBrand" required>
+            <option value="">-- Pilih Merk Splicer --</option>
+            ${brands.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}
+          </select>
+        `;
+      } else {
+        brandWrap.innerHTML = `<input name="brand" id="leaderBrand" placeholder="Merk">`;
+      }
+    }
+
+    function applyLeaderPhotoMode() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const gallery = String(item?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("leaderPhoto"), $("leaderSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    }
+    itemSelect.onchange = () => { refreshLeaderBrand(); applyLeaderPhotoMode(); };
+    refreshLeaderBrand();
+    applyLeaderPhotoMode();
+
+    $("leaderAddInventoryForm").onsubmit = async e => {
+      e.preventDefault();
+
+      const btn = $("leaderAddInventorySubmit");
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Menyimpan...";
+
+      try {
+        const fd = new FormData(e.target);
+        const photo = $("leaderPhoto")?.files?.[0] || null;
+        const serialPhoto = $("leaderSerialPhoto")?.files?.[0] || null;
+
+        const payload = {
+          technicianId: fd.get("technicianId"),
+          itemId: fd.get("itemId"),
+          brand: fd.get("brand") || "",
+          type: fd.get("type") || "",
+          serialNumber: fd.get("serialNumber") || "",
+          condition: fd.get("condition") || "BAIK",
+          note: fd.get("note") || "",
+          photo: photo ? await fileToBase64(photo) : "",
+          serialPhoto: serialPhoto ? await fileToBase64(serialPhoto) : ""
+        };
+
+        const r = await api("leaderAddInventory", payload);
+        toast(r.data?.message || "ALKER berhasil ditambahkan.");
+        closeModal();
+        await renderTeamInventory();
+
+      } catch (err) {
+        toast(err.message || "Gagal menambahkan ALKER.");
+        btn.disabled = false;
+        btn.textContent = "Simpan ALKER";
+      }
+    };
+
+  } catch (err) {
+    toast(err.message || "Gagal membuka form Input ALKER.");
+  }
+};
+
+
+async function renderTeamRequests() {
+
+  const r =
+    await api(
+      "requests",
+      {
+        scope: "loker"
+      }
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Validasi Request
+        </h2>
+
+        <p class="muted">
+          Validasi kebutuhan teknisi
+          sebelum diteruskan ke Gudang.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Request</th>
+            <th>Teknisi</th>
+            <th>Alker</th>
+            <th>Jenis</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th></th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.requestId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.requestType)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+
+                      ${
+                        /MENUNGGU VALIDASI/.test(
+                          x.status || ""
+                        )
+                          ? `
+
+                            <button
+                              class="btn success"
+                              onclick="
+                                approveRequest(
+                                  '${esc(x.requestId)}'
+                                )
+                              "
+                            >
+                              Approve
+                            </button>
+
+                            <button
+                              class="btn danger"
+                              onclick="
+                                rejectRequest(
+                                  '${esc(x.requestId)}'
+                                )
+                              "
+                            >
+                              Tolak
+                            </button>
+
+                          `
+                          : ""
+                      }
+
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="7">
+
+                <div class="empty">
+                  Tidak ada request.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.approveRequest =
+  async id => {
+
+    try {
+
+      await api(
+        "requestDecision",
+        {
+          requestId: id,
+          decision: "APPROVE"
+        }
+      );
+
+
+      toast(
+        "Request disetujui."
+      );
+
+
+      renderTeamRequests();
+
+    } catch (e) {
+
+      toast(e.message);
+
+    }
+  };
+
+
+window.rejectRequest =
+  async id => {
+
+    const note =
+      prompt(
+        "Alasan penolakan:"
+      );
+
+
+    if (note === null)
+      return;
+
+
+    try {
+
+      await api(
+        "requestDecision",
+        {
+          requestId: id,
+          decision: "REJECT",
+          note
+        }
+      );
+
+
+      toast(
+        "Request ditolak."
+      );
+
+
+      renderTeamRequests();
+
+    } catch (e) {
+
+      toast(e.message);
+
+    }
+  };
+
+
+/*************************************************
+ * GUDANG
+ * STOK PER ALKER
+ *************************************************/
+
+async function renderWarehouse(){
+
+  const r =
+    await api(
+      "warehouse"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Stok Gudang
+        </h2>
+
+        <p class="muted">
+          Stok aktual berdasarkan jenis ALKER
+          dan kondisi fisiknya.
+        </p>
+
+      </div>
+
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn" onclick="showWarehouseStockForm()">+ Validasi Stok Lama</button>
+        <button class="btn primary" onclick="showReceivingForm()">+ Barang Masuk</button>
+      </div>
+
+    </div>
+
+
+    <!-- ==================================
+         RINGKASAN GUDANG
+    =================================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Unit Gudang",
+        d.summary?.count || 0,
+        "unit"
+      )}
+
+
+      ${metric(
+        "Nilai Stok",
+        money(
+          d.summary?.value || 0
+        ),
+        "inventory"
+      )}
+
+
+      ${metric(
+        "Request",
+        d.summary?.requests || 0,
+        "menunggu"
+      )}
+
+
+      ${metric(
+        "Pengadaan",
+        d.summary?.procurement || 0,
+        "aktif"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         STOK PER ALKER
+    =================================== -->
+
+    <div class="card">
+
+      <div class="section-head">
+
+        <div>
+
+          <h3>
+            Ketersediaan ALKER
+          </h3>
+
+          <p class="muted">
+            Menampilkan jumlah dan kondisi
+            setiap jenis ALKER yang tersedia
+            di Gudang.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>ALKER</th>
+
+              <th>TOTAL</th>
+
+              <th>BAIK</th>
+
+              <th>RUSAK RINGAN</th>
+
+              <th>RUSAK BERAT</th>
+
+              <th>HILANG</th>
+
+              <th>SIAP DIPAKAI</th>
+
+              <th>NILAI</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              (d.byItem || [])
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.itemName
+                          )}
+                        </strong>
+
+                        <div class="small muted">
+
+                          ${esc(
+                            x.category ||
+                            "-"
+                          )}
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${x.total}
+                        </strong>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge green">
+                          ${x.baik}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge yellow">
+                          ${x.rusakRingan}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        <span class="badge red">
+                          ${x.rusakBerat}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.hilang > 0
+
+                            ? `
+                              <span class="badge red">
+                                ${x.hilang}
+                              </span>
+                            `
+
+                            : `
+                              <span class="badge gray">
+                                0
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        ${
+                          x.siapDipakai > 0
+
+                            ? `
+                              <span class="badge green">
+                                ${x.siapDipakai}
+                              </span>
+                            `
+
+                            : `
+                              <span class="badge gray">
+                                0
+                              </span>
+                            `
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        <strong>
+                          ${money(
+                            x.nilai
+                          )}
+                        </strong>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+
+                <tr>
+
+                  <td colspan="8">
+
+                    <div class="empty">
+
+                      Belum ada ALKER
+                      di Gudang.
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <!-- ==================================
+         DETAIL UNIT
+    =================================== -->
+
+    <div class="card">
+
+      <h3>
+        Detail Unit Gudang
+      </h3>
+
+
+      ${warehouseTableDetail_(
+        d.items || []
+      )}
+
+    </div>
+
+  `;
+
+}
+
+
+function warehouseTableDetail_(
+  items
+){
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ID</th>
+
+            <th>ALKER</th>
+
+            <th>MERK / TYPE</th>
+
+            <th>SN</th>
+
+            <th>KONDISI</th>
+
+            <th>STATUS</th>
+
+            <th>NILAI</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            items
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(
+                        x.inventoryId
+                      )}
+                    </td>
+
+
+                    <td>
+
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+
+                    </td>
+
+
+                    <td>
+
+                      ${esc(
+                        x.brand ||
+                        "-"
+                      )}
+
+                      /
+
+                      ${esc(
+                        x.type ||
+                        "-"
+                      )}
+
+                    </td>
+
+
+                    <td>
+                      ${esc(
+                        x.serialNumber ||
+                        "-"
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.condition
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.status
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${money(
+                        x.price
+                      )}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `
+
+              <tr>
+
+                <td colspan="7">
+
+                  <div class="empty">
+                    Stok kosong.
+                  </div>
+
+                </td>
+
+              </tr>
+
+            `
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+}
+
+/*************************************************
+ * VERIFIKASI INVENTORY AWAL
+ *************************************************/
+
+async function renderInitial(){
+
+  const r =
+    await api(
+      "initialPending"
+    );
+
+
+  const data =
+    r.data || [];
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Verifikasi Inventory Awal
+        </h2>
+
+        <p class="muted">
+          Periksa ALKER yang dilaporkan
+          teknisi sebelum menjadi inventory
+          atau diteruskan ke pengadaan.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Teknisi</th>
+            <th>Loker</th>
+            <th>ALKER</th>
+            <th>Pemberian</th>
+            <th>Merk / Type</th>
+            <th>SN</th>
+            <th>Kondisi</th>
+            <th>Tanggal</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            data
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(
+                        x.technician
+                      )}
+                    </td>
+
+                    <td>
+                      ${esc(
+                        x.loker
+                      )}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+                    </td>
+
+                    <td>
+                      ${badge(
+                        x.givenStatus ||
+                        "BELUM DIBERIKAN"
+                      )}
+                    </td>
+
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
+
+                          ? esc(
+                              (
+                                x.brand ||
+                                "-"
+                              ) +
+                              " / " +
+                              (
+                                x.type ||
+                                "-"
+                              )
+                            )
+
+                          : "-"
+                      }
+                    </td>
+
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
+
+                          ? esc(
+                              x.serialNumber ||
+                              "-"
+                            )
+
+                          : "-"
+                      }
+                    </td>
+
+                    <td>
+                      ${
+                        x.givenStatus ===
+                        "SUDAH DIBERIKAN"
+
+                          ? badge(
+                              x.condition
+                            )
+
+                          : "-"
+                      }
+                    </td>
+
+                    <td>
+                      ${esc(
+                        x.date
+                      )}
+                    </td>
+					
+	<td>
+
+  <div class="actions">
+
+    <button
+      class="btn secondary"
+      onclick='showInitialVerificationDetail(${JSON.stringify(x)})'
+    >
+      Detail / Foto
+    </button>
+
+    <button
+      class="btn success"
+      onclick="
+        initialDecision(
+          '${esc(x.initialId)}',
+          'APPROVE'
+        )
+      "
+    >
+      ${
+        x.givenStatus ===
+        "BELUM DIBERIKAN"
+          ? "Verifikasi & Pengadaan"
+          : "Approve"
+      }
+    </button>
+
+    <button
+      class="btn warning"
+      onclick="
+        initialDecision(
+          '${esc(x.initialId)}',
+          'REVISION'
+        )
+      "
+    >
+      Revisi
+    </button>
+
+	</div>
+
+		</td>
+				
+                  </tr>
+
+                `
+              )
+              .join("")
+
+              ||
+
+              `<tr>
+
+                <td colspan="9">
+
+                  <div class="empty">
+                    Tidak ada pengajuan
+                    yang menunggu verifikasi.
+                  </div>
+
+                </td>
+
+              </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+/*************************************************
+ * BARANG MASUK
+ *************************************************/
+
+async function renderReceiving() {
+
+  const r =
+    await api(
+      "receiving"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Barang Masuk Gudang
+        </h2>
+
+        <p class="muted">
+          Setiap barang baru yang diterima
+          menjadi inventory resmi.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showReceivingForm()"
+      >
+        + Catat Barang Masuk
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Transaksi</th>
+            <th>Alker</th>
+            <th>Qty</th>
+            <th>Supplier</th>
+            <th>Tanggal</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.receivingId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${esc(x.supplier)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada penerimaan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * VALIDASI STOK LAMA GUDANG
+ * Mencatat unit yang sudah ada secara fisik,
+ * bukan penerimaan barang baru.
+ *************************************************/
+window.showWarehouseStockForm = async () => {
+  try {
+    const r = await api("masters");
+    const items = r.data?.items || [];
+    if (!items.length) throw new Error("Master ALKER belum tersedia.");
+    openModal("Validasi Stok Lama Gudang", `
+      <form id="warehouseStockForm">
+        <div class="form-grid">
+          <label>ALKER
+            <select name="itemId" id="warehouseStockItemId" required>
+              ${items.map(x => `<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Merek
+            <input name="brand" placeholder="Merek ALKER" required>
+          </label>
+          <label>Tipe
+            <input name="type" placeholder="Tipe/model ALKER">
+          </label>
+          <label>Jumlah / Quantity
+            <input name="quantity" type="number" min="1" max="500" value="1" required>
+          </label>
+          <label>Nomor Seri (SN)
+            <input name="serialNumber" placeholder="Wajib jika quantity 1; untuk banyak unit isi di keterangan bila berbeda">
+          </label>
+          <label>Kondisi Fisik
+            <select name="condition" required>
+              <option value="BAIK">BAIK</option>
+              <option value="RUSAK RINGAN">RUSAK RINGAN</option>
+              <option value="RUSAK BERAT">RUSAK BERAT</option>
+              <option value="HILANG">HILANG</option>
+            </select>
+          </label>
+          <label>Foto ALKER
+            <input name="photo" type="file" accept="image/*" capture="environment" required>
+          </label>
+          <label>Foto Serial / Label
+            <input name="serialPhoto" type="file" accept="image/*" capture="environment">
+          </label>
+          <label class="full-col">Keterangan
+            <textarea name="note" placeholder="Catatan kondisi atau hasil pengecekan"></textarea>
+          </label>
+        </div>
+        <div class="card" style="margin-top:12px;padding:12px">
+          <strong>Catatan validasi</strong>
+          <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap dicatat. Jika quantity lebih dari 1, data dibuat per unit; nomor seri dapat dicatat pada keterangan jika setiap unit berbeda.</p>
+        </div>
+        <div class="actions" style="margin-top:15px">
+          <button type="submit" class="btn primary" id="warehouseStockSaveBtn">Simpan Validasi Stok</button>
+        </div>
+      </form>`);
+    const form = $("warehouseStockForm");
+    const btn = $("warehouseStockSaveBtn");
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "⏳ Menyimpan...";
+      try {
+        await api("warehouseStockAdd", {
+          itemId: form.itemId.value,
+          brand: form.brand.value.trim(),
+          type: form.type.value.trim(),
+          serialNumber: form.serialNumber.value.trim(),
+          quantity: form.quantity.value,
+          condition: form.condition.value,
+          note: form.note.value.trim(),
+          photo: await fileToBase64(form.photo.files[0]),
+          serialPhoto: await fileToBase64(form.serialPhoto.files[0])
+        });
+        closeModal();
+        toast("Stok lama berhasil divalidasi dan dicatat.");
+        await renderWarehouse();
+      } catch (err) {
+        toast(err.message || "Gagal menyimpan validasi stok.");
+        btn.disabled = false;
+        btn.textContent = "Simpan Validasi Stok";
+      }
+    };
+  } catch (err) {
+    toast(err.message || "Form validasi stok tidak dapat dibuka.");
+  }
+};
+
+/*************************************************
+ * FORM BARANG MASUK GUDANG
+ *
+ * HARGA OTOMATIS DARI MASTER ALKER
+ *
+ * Gudang tidak mengisi harga manual.
+ * Harga hanya ditentukan melalui
+ * menu MASTER HARGA ALKER.
+ *************************************************/
+
+window.showReceivingForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    const items =
+      r.data?.items ||
+      [];
+
+
+    /*
+     * ==========================================
+     * FORMAT RUPIAH
+     * ==========================================
+     */
+
+    const formatRupiah =
+      value => {
+
+        const n =
+          Number(value || 0);
+
+
+        return new Intl.NumberFormat(
+          "id-ID",
+          {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+          }
+        ).format(n);
+
+      };
+
+
+    /*
+     * ==========================================
+     * MODAL
+     * ==========================================
+     */
+
+    openModal(
+
+      "Catat Barang Baru Masuk Gudang",
+
+      `
+
+        <form id="receivingForm">
+
+          <div class="form-grid">
+
+
+            <!-- ==============================
+                 ALKER
+            =============================== -->
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                id="receivingItemId"
+                required
+              >
+
+                ${
+                  items
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(
+                            x.itemId
+                          )}"
+                        >
+
+                          ${esc(
+                            x.itemName
+                          )}
+
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <!-- ==============================
+                 QTY
+            =============================== -->
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+                required
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 MERK
+            =============================== -->
+
+            <label>
+
+              Merk
+
+              <div id="receivingBrandWrap">
+                <input
+                  name="brand"
+                >
+              </div>
+
+            </label>
+
+
+            <!-- ==============================
+                 TYPE
+            =============================== -->
+
+            <label>
+
+              Type
+
+              <input
+                name="type"
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 SERIAL NUMBER
+            =============================== -->
+
+            <label>
+
+              Serial Number
+
+              <input
+                name="serialNumber"
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 HARGA MASTER
+            =============================== -->
+
+            <label>
+
+              Harga Master ALKER
+
+              <input
+                id="receivingMasterPrice"
+                type="text"
+                readonly
+                style="
+                  background:#f3f4f6;
+                  font-weight:700;
+                  cursor:not-allowed;
+                "
+              >
+
+              <small
+                class="muted"
+                style="
+                  display:block;
+                  margin-top:4px;
+                "
+              >
+                Harga ditentukan dari Master Harga ALKER.
+                Tidak dapat diubah di Barang Masuk.
+              </small>
+
+            </label>
+
+
+            <!-- ==============================
+                 SUPPLIER
+            ============================== -->
+
+            <label>
+
+              Supplier
+
+              <input
+                name="supplier"
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 PO / INVOICE
+            ============================== -->
+
+            <label>
+
+              No. PO / Invoice
+
+              <input
+                name="reference"
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 KETERANGAN
+            ============================== -->
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+              ></textarea>
+
+            </label>
+
+
+            <!-- ==============================
+                 FOTO BARANG
+            ============================== -->
+
+            <label>
+
+              Foto Barang
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+            <!-- ==============================
+                 FOTO DOKUMEN
+            ============================== -->
+
+            <label>
+
+              Foto Invoice / Surat Jalan
+
+              <input
+                name="docPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+          </div>
+
+
+          <!-- ================================
+               INFORMASI HARGA
+          ================================= -->
+
+          <div
+            class="card"
+            style="
+              margin-top:15px;
+              padding:14px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:12px;
+              "
+            >
+
+              <div>
+
+                <strong>
+                  Nilai Aset
+                </strong>
+
+                <div
+                  class="muted"
+                  style="margin-top:3px"
+                >
+                  Mengikuti harga Master ALKER.
+                </div>
+
+              </div>
+
+
+              <strong
+                id="receivingMasterPriceInfo"
+                style="
+                  font-size:18px;
+                "
+              >
+                Rp0
+              </strong>
+
+            </div>
+
+          </div>
+
+
+          <!-- ================================
+               ACTION
+          ================================= -->
+
+          <div
+            class="actions"
+            style="
+              margin-top:15px;
+            "
+          >
+
+            <button
+              type="submit"
+              class="btn primary"
+              id="receivingSaveBtn"
+            >
+
+              Simpan & Masuk Gudang
+
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    /*
+     * ==========================================
+     * ELEMENT
+     * ==========================================
+     */
+
+    const form =
+      $("receivingForm");
+
+
+    const itemSelect =
+      $("receivingItemId");
+
+
+    const priceInput =
+      $("receivingMasterPrice");
+
+
+    const priceInfo =
+      $("receivingMasterPriceInfo");
+
+
+    const saveBtn =
+      $("receivingSaveBtn");
+
+
+    /*
+     * ==========================================
+     * UPDATE HARGA MASTER DI LAYAR
+     * ==========================================
+     */
+
+    const updateMasterPriceDisplay =
+      async () => {
+
+        const selectedItem =
+          items.find(
+            x =>
+              String(x.itemId) ===
+              String(
+                itemSelect.value
+              )
+          );
+
+
+        if(isSplicerItem_(selectedItem?.itemName)){
+
+          const brandInput =
+            form.querySelector(
+              '[name="brand"]'
+            );
+
+          const brand =
+            String(
+              brandInput?.value ||
+              ""
+            ).trim();
+
+
+          if(!brand){
+
+            if(priceInput){
+              priceInput.value =
+                "Pilih merek Splicer";
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                "Pilih merek Splicer";
+            }
+
+            return;
+
+          }
+
+
+          try{
+
+            const r =
+              await api(
+                "masterBrandPrices",
+                {
+                  itemId:
+                    selectedItem.itemId
+                }
+              );
+
+            const variant =
+              (r.data || []).find(
+                x =>
+                  String(x.brand || "")
+                    .toLowerCase() ===
+                  brand.toLowerCase()
+              );
+
+            const formatted =
+              variant
+                ? formatRupiah(
+                    variant.price
+                  )
+                : "Harga belum ditentukan";
+
+            if(priceInput){
+              priceInput.value =
+                formatted;
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                formatted;
+            }
+
+          }catch(err){
+
+            if(priceInput){
+              priceInput.value =
+                "Harga belum tersedia";
+            }
+
+            if(priceInfo){
+              priceInfo.textContent =
+                err.message ||
+                "Harga belum tersedia";
+            }
+
+          }
+
+          return;
+
+        }
+
+
+        const price =
+          Number(
+            selectedItem?.standardPrice ||
+            selectedItem?.price ||
+            0
+          );
+
+
+        const formatted =
+          formatRupiah(
+            price
+          );
+
+
+        if(priceInput){
+          priceInput.value =
+            formatted;
+        }
+
+
+        if(priceInfo){
+          priceInfo.textContent =
+            formatted;
+        }
+
+      };
+
+
+    /*
+     * ==========================================
+     * SAAT ALKER / MEREK DIGANTI
+     * ==========================================
+     */
+
+    itemSelect.onchange =
+      async () => {
+
+        const selectedItem =
+          items.find(
+            x =>
+              String(x.itemId) ===
+              String(itemSelect.value)
+          );
+
+        const wrap =
+          $("receivingBrandWrap");
+
+        if(wrap){
+
+          const currentBrand =
+            wrap.querySelector(
+              '[name="brand"]'
+            )?.value || "";
+
+          wrap.innerHTML =
+            splicerBrandFieldHtml_(
+              selectedItem,
+              currentBrand
+            );
+
+        }
+
+        await updateMasterPriceDisplay();
+
+      };
+
+
+    form.addEventListener(
+      "change",
+      async e => {
+
+        if(
+          e.target?.name ===
+          "brand"
+        ){
+
+          await updateMasterPriceDisplay();
+
+        }
+
+      }
+    );
+
+
+    /*
+     * Tampilkan harga pertama
+     */
+
+    await updateMasterPriceDisplay();
+
+
+    /*
+     * ==========================================
+     * SUBMIT
+     * ==========================================
+     */
+
+    form.onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+
+        /*
+         * Cegah klik 2x
+         */
+
+        if(
+          saveBtn &&
+          saveBtn.disabled
+        ){
+
+          return;
+
+        }
+
+
+        /*
+         * Lock tombol
+         */
+
+        if(saveBtn){
+
+          saveBtn.disabled =
+            true;
+
+          saveBtn.innerHTML =
+            "⏳ Menyimpan...";
+
+        }
+
+
+        try {
+
+          /*
+           * ==================================
+           * KIRIM DATA
+           * ==================================
+           *
+           * PENTING:
+           * Tidak ada lagi:
+           *
+           * price: f.price.value
+           *
+           * Harga diambil backend dari
+           * MASTER_ALKER.standardPrice.
+           */
+
+          const result =
+            await api(
+              "receive",
+              {
+
+                itemId:
+                  form.itemId.value,
+
+                qty:
+                  form.qty.value,
+
+                brand:
+                  form.brand.value,
+
+                type:
+                  form.type.value,
+
+                serialNumber:
+                  form.serialNumber.value,
+
+                supplier:
+                  form.supplier.value,
+
+                reference:
+                  form.reference.value,
+
+                note:
+                  form.note.value,
+
+                photo:
+                  await fileToBase64(
+                    form.photo.files[0]
+                  ),
+
+                docPhoto:
+                  await fileToBase64(
+                    form.docPhoto.files[0]
+                  )
+
+              }
+            );
+
+
+          /*
+           * ==================================
+           * BERHASIL
+           * ==================================
+           */
+
+          closeModal();
+
+
+          toast(
+            "Barang berhasil masuk Gudang dengan harga Master ALKER."
+          );
+
+
+          await renderReceiving();
+
+
+        } catch(err) {
+
+
+          /*
+           * ==================================
+           * GAGAL
+           * ==================================
+           */
+
+          toast(
+            err.message ||
+            "Gagal menyimpan Barang Masuk."
+          );
+
+
+          /*
+           * Buka kembali tombol
+           */
+
+          if(saveBtn){
+
+            saveBtn.disabled =
+              false;
+
+            saveBtn.innerHTML =
+              "Simpan & Masuk Gudang";
+
+          }
+
+        }
+
+      };
+
+  };
+
+/*************************************************
+ * DISTRIBUSI
+ *************************************************/
+
+async function renderDistribution() {
+
+  const r =
+    await api(
+      "distribution"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Distribusi
+        </h2>
+
+        <p class="muted">
+          Pencatatan barang keluar
+          dari Gudang menuju teknisi.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showDistributionForm()"
+      >
+        + Distribusi
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Transaksi</th>
+            <th>Alker</th>
+            <th>Tujuan</th>
+            <th>Pemegang</th>
+            <th>Tanggal</th>
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.distributionId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${esc(x.loker)}
+                    </td>
+
+                    <td>
+                      ${esc(x.technician)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada distribusi.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showDistributionForm =
+  async () => {
+
+    const [
+      m,
+      w,
+      t
+    ] =
+      await Promise.all([
+
+        api("masters"),
+
+        api("warehouse"),
+
+        api(
+          "technicians",
+          {scope: "all"}
+        )
+
+      ]);
+
+
+    openModal(
+
+      "Distribusi Alker",
+
+      `
+
+        <form id="distributionForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Inventory Gudang
+
+              <select
+                name="inventoryId"
+                required
+              >
+
+                ${
+                  (
+                    w.data?.items ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.inventoryId)}"
+                        >
+
+                          ${esc(x.inventoryId)}
+                          —
+                          ${esc(x.itemName)}
+                          ${esc(
+                            x.serialNumber
+                              ? " • " +
+                                x.serialNumber
+                              : ""
+                          )}
+
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Teknisi
+
+              <select
+                name="technician"
+                required
+              >
+
+                ${
+                  (
+                    t.data ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.id)}"
+                        >
+                          ${esc(x.name)}
+                          —
+                          ${esc(x.loker)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Kondisi Saat Diserahkan
+
+              <select
+                name="condition"
+              >
+
+                <option>
+                  BAIK
+                </option>
+
+                <option>
+                  RUSAK RINGAN
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Catatan
+
+              <textarea
+                name="note"
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Distribusikan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("distributionForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "distribute",
+            {
+
+              inventoryId:
+                f.inventoryId.value,
+
+              technicianId:
+                f.technician.value,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Distribusi berhasil dicatat."
+          );
+
+
+          renderDistribution();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * PENGADAAN
+ *************************************************/
+
+async function renderProcurement() {
+
+  const r =
+    await api(
+      "procurement"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Pengadaan
+        </h2>
+
+        <p class="muted">
+          Kebutuhan pembelian ALKER
+          dan SALKER.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showProcurementForm()"
+      >
+        + Pengajuan Pembelian
+      </button>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Pengadaan</th>
+            <th>Alker</th>
+            <th>Qty</th>
+            <th>Estimasi</th>
+            <th>Status</th>
+            <th>Tanggal</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.procurementId)}
+                    </td>
+
+                    <td>
+                      ${esc(x.itemName)}
+                    </td>
+
+                    <td>
+                      ${x.qty}
+                    </td>
+
+                    <td>
+                      ${money(x.estimate)}
+                    </td>
+
+                    <td>
+                      ${badge(x.status)}
+                    </td>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="6">
+
+                <div class="empty">
+                  Belum ada pengadaan.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+window.showProcurementForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    openModal(
+
+      "Pengajuan Pembelian",
+
+      `
+
+        <form id="procForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Alker
+
+              <select
+                name="itemId"
+                required
+              >
+
+                ${
+                  (
+                    r.data?.items ||
+                    []
+                  )
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.itemId)}"
+                        >
+                          ${esc(x.itemName)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Qty
+
+              <input
+                name="qty"
+                type="number"
+                min="1"
+                value="1"
+              >
+
+            </label>
+
+
+            <label>
+
+              Estimasi Harga / Unit
+
+              <input
+                name="estimate"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label>
+
+              Prioritas
+
+              <select
+                name="priority"
+              >
+
+                <option>
+                  NORMAL
+                </option>
+
+                <option>
+                  TINGGI
+                </option>
+
+                <option>
+                  MENDESAK
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Alasan
+
+              <textarea
+                name="reason"
+                required
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Ajukan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("procForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try {
+
+          await api(
+            "createProcurement",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              qty:
+                f.qty.value,
+
+              estimate:
+                f.estimate.value,
+
+              priority:
+                f.priority.value,
+
+              reason:
+                f.reason.value
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Pengadaan diajukan."
+          );
+
+
+          renderProcurement();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+
+/*************************************************
+ * SELURUH INVENTORY
+ *************************************************/
+
+async function renderAllInventory() {
+
+  const r =
+    await api(
+      "inventory",
+      {
+        scope: "all"
+      }
+    );
+
+
+  const all =
+    r.data || [];
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Seluruh Inventory
+        </h2>
+
+        <p class="muted">
+          Pusat pencarian posisi seluruh
+          ALKER / SALKER.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="toolbar">
+
+      <input
+        id="invSearch"
+        placeholder="Cari ID, nama, SN, teknisi..."
+      >
+
+    </div>
+
+
+    <div id="allInv">
+    </div>
+
+  `;
+
+
+  const draw =
+    () => {
+
+      const q =
+        (
+          $("invSearch")
+            .value ||
+          ""
+        ).toLowerCase();
+
+
+      const filtered =
+        all.filter(
+          x =>
+            JSON.stringify(x)
+              .toLowerCase()
+              .includes(q)
+        );
+
+
+      renderInventoryTable(
+        $("allInv"),
+        filtered,
+        "all"
+      );
+    };
+
+
+  $("invSearch").oninput =
+    draw;
+
+
+  draw();
+}
+
+
+/*************************************************
+ * MASTER DATA
+ *************************************************/
+
+async function renderMaster() {
+
+  const r =
+    await api(
+      "masters"
+    );
+
+
+  const d =
+    r.data || {};
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Master Data
+        </h2>
+
+        <p class="muted">
+          Daftar loker dan master ALKER.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showMasterForm()"
+      >
+        + Tambah ALKER
+      </button>
+
+    </div>
+
+
+    <div class="grid two">
+
+
+      <div class="card">
+
+        <h3>
+          Loker
+        </h3>
+
+
+        ${
+          (d.lokers || [])
+            .map(
+              x => `
+
+                <div class="kpi-line">
+
+                  <span>
+                    ${esc(x.name)}
+                  </span>
+
+                  ${badge(
+                    x.status ||
+                    "AKTIF"
+                  )}
+
+                </div>
+
+              `
+            )
+            .join("") ||
+
+          `<div class="empty">
+            Belum ada loker.
+          </div>`
+        }
+
+      </div>
+
+
+      <div class="card">
+
+        <h3>
+          Master ALKER
+          (${(d.items || []).length})
+        </h3>
+
+        <p class="muted">ALKER master langsung tersedia untuk pilihan pengguna sesuai loker. Tidak perlu masuk Gudang terlebih dahulu.</p>
+
+        ${
+          (d.items || [])
+            .map(
+              x => `
+                <div class="kpi-line" style="gap:12px;align-items:center">
+                  <span style="flex:1;min-width:0">
+                    <strong>${esc(x.itemName)}</strong>
+                    <small class="muted" style="display:block">${esc(x.category || "-")} · ${esc(x.unit || "UNIT")}</small>
+                    <small class="muted" style="display:block">Loker: ${esc(x.lokers || "-")}</small>
+                    <small class="muted" style="display:block">Foto: ${String(x.photoMode || "CAMERA").toUpperCase()==="GALLERY" ? "Galeri diizinkan" : "Kamera saja (prioritas kamera)"}</small>
+                    ${badge(String(x.active || "Y").toUpperCase()==="Y" ? "AKTIF" : "NONAKTIF")}
+                  </span>
+                  ${String(session?.role || "").toUpperCase()==="ADMIN" ? `
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                      <button type="button" class="btn secondary" onclick="editMasterPhotoMode('${esc(x.itemId)}')">Izin Foto</button>
+                      <button type="button" class="btn secondary" onclick="editMasterItem('${esc(x.itemId)}')">Edit Loker</button>
+                      <button type="button" class="btn ${String(x.active || "Y").toUpperCase()==="Y" ? "danger" : "primary"}" onclick="toggleMasterItem('${esc(x.itemId)}','${String(x.active || "Y").toUpperCase()==="Y" ? "N" : "Y"}')">
+                        ${String(x.active || "Y").toUpperCase()==="Y" ? "Nonaktifkan" : "Aktifkan"}
+                      </button>
+                    </div>` : ""}
+                </div>
+              `
+            )
+            .join("") ||
+          `<div class="empty">Belum ada master ALKER.</div>`
+        }
+
+      </div>
+
+
+    </div>
+
+  `;
+}
+
+
+window.toggleMasterItem = async (itemId, active) => {
+  const verb = active === "Y" ? "mengaktifkan" : "menonaktifkan";
+  if (!confirm(`Yakin ${verb} ALKER ini?`)) return;
+  try {
+    await api("updateMasterItemStatus", { itemId, active });
+    toast(active === "Y" ? "ALKER berhasil diaktifkan dan tersedia untuk pengguna." : "ALKER dinonaktifkan dari pilihan pengguna.");
+    await renderMaster();
+  } catch (err) {
+    toast(err.message || "Status ALKER gagal diperbarui.");
+  }
+};
+
+window.editMasterItem = async (itemId) => {
+  try {
+    const r = await api("masters");
+    const d = r.data || {};
+    const item = (d.items || []).find(x => String(x.itemId) === String(itemId));
+    if (!item) throw new Error("Master ALKER tidak ditemukan.");
+    const lokers = (d.lokers || []).filter(x => x.name !== "GUDANG");
+    const current = String(item.lokers || "").split("|").map(x => x.trim()).filter(Boolean);
+    openModal("Edit Loker ALKER", `
+      <form id="editMasterLokerForm">
+        <p><strong>${esc(item.itemName)}</strong></p>
+        <p class="muted">Pilih satu atau beberapa loker yang boleh melihat ALKER ini. Perubahan tidak mengubah stok Gudang atau data inventaris yang sudah ada.</p>
+        <div class="form-grid">
+          <label class="full-col">Loker Pengguna
+            <select name="loker" multiple size="${Math.min(Math.max(lokers.length, 3), 7)}" required>
+              ${lokers.map(x => `<option value="${esc(x.name)}" ${current.includes(x.name) ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
+            </select>
+            <small class="muted">Gunakan Ctrl (Windows) atau Command (Mac) untuk memilih lebih dari satu.</small>
+          </label>
+        </div>
+        <div class="actions" style="margin-top:15px">
+          <button class="btn primary" type="submit">Simpan Perubahan</button>
+        </div>
+      </form>`);
+    $("editMasterLokerForm").onsubmit = async e => {
+      e.preventDefault();
+      const selectedLokers = [...e.target.loker.selectedOptions].map(o => o.value);
+      if (!selectedLokers.length) { toast("Pilih minimal satu loker."); return; }
+      try {
+        await api("updateMasterItemLokers", { itemId, lokers: selectedLokers.join("|") });
+        closeModal();
+        toast("Loker ALKER berhasil diperbarui.");
+        await renderMaster();
+      } catch (err) { toast(err.message || "Loker ALKER gagal diperbarui."); }
+    };
+  } catch (err) { toast(err.message || "Data ALKER gagal dimuat."); }
+};
+
+window.editMasterPhotoMode = async (itemId) => {
+  try {
+    const r = await api("masters");
+    const item = (r.data?.items || []).find(x => String(x.itemId) === String(itemId));
+    if (!item) throw new Error("Master ALKER tidak ditemukan.");
+    const current = String(item.photoMode || "CAMERA").toUpperCase();
+    openModal("Pengaturan Upload Foto", `
+      <form id="masterPhotoModeForm">
+        <p><strong>${esc(item.itemName)}</strong></p>
+        <p class="muted">Atur pilihan foto pada formulir input ALKER untuk jenis ini.</p>
+        <label class="full-col">Metode Foto
+          <select name="photoMode" required>
+            <option value="GALLERY" ${current === "GALLERY" ? "selected" : ""}>Galeri diizinkan</option>
+            <option value="CAMERA" ${current !== "GALLERY" ? "selected" : ""}>Kamera saja (prioritaskan kamera)</option>
+          </select>
+        </label>
+        <p class="muted">Catatan: pada browser web, pilihan kamera saja memakai atribut kamera browser dan tidak selalu dapat memblokir galeri sepenuhnya.</p>
+        <div class="actions" style="margin-top:15px"><button class="btn primary" type="submit">Simpan Pengaturan</button></div>
+      </form>`);
+    $("masterPhotoModeForm").onsubmit = async e => {
+      e.preventDefault();
+      try {
+        await api("updateMasterPhotoMode", {itemId, photoMode:e.target.photoMode.value});
+        closeModal(); toast("Pengaturan upload foto berhasil disimpan."); await renderMaster();
+      } catch (err) { toast(err.message || "Pengaturan foto gagal disimpan."); }
+    };
+  } catch (err) { toast(err.message || "Gagal membuka pengaturan foto."); }
+};
+
+window.showMasterForm =
+  async () => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    const lokers =
+      (
+        r.data?.lokers ||
+        []
+      ).filter(
+        x =>
+          x.name !==
+          "GUDANG"
+      );
+
+
+    openModal(
+
+      "Tambah Master ALKER",
+
+      `
+
+        <form id="masterForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Nama ALKER
+
+              <input
+                name="itemName"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Kategori
+
+              <input
+                name="category"
+                required
+              >
+
+            </label>
+
+
+            <label>
+
+              Satuan
+
+              <input
+                name="unit"
+                value="UNIT"
+              >
+
+            </label>
+
+
+            <label>
+
+              Harga Standar
+
+              <input
+                name="price"
+                type="number"
+                min="0"
+              >
+
+            </label>
+
+
+            <label class="full-col">
+
+              Loker Pengguna
+
+              <select
+                name="loker"
+                multiple
+                size="5"
+              >
+
+                ${
+                  lokers
+                    .map(
+                      x => `
+
+                        <option
+                          value="${esc(x.name)}"
+                        >
+                          ${esc(x.name)}
+                        </option>
+
+                      `
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+              Izin Upload Foto
+              <select name="photoMode">
+                <option value="CAMERA" selected>Kamera saja (prioritaskan kamera)</option>
+                <option value="GALLERY">Galeri diizinkan</option>
+              </select>
+              <small class="muted">Pilihan kamera mengikuti kemampuan browser/perangkat.</small>
+            </label>
+
+            <label class="full-col">
+
+              Merk / Spesifikasi
+
+              <textarea
+                name="spec"
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              class="btn primary"
+            >
+              Simpan
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("masterForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        const selectedLokers =
+          [
+            ...f.loker.selectedOptions
+          ]
+            .map(
+              o => o.value
+            )
+            .join("|");
+
+
+        try {
+
+          await api(
+            "addMasterItem",
+            {
+
+              itemName:
+                f.itemName.value,
+
+              category:
+                f.category.value,
+
+              unit:
+                f.unit.value,
+
+              price:
+                f.price.value,
+
+              lokers:
+                selectedLokers,
+
+              spec:
+                f.spec.value,
+
+              photoMode:
+                f.photoMode.value || "CAMERA"
+            }
+          );
+
+
+          closeModal();
+
+          toast(
+            "Master ALKER ditambahkan."
+          );
+
+
+          renderMaster();
+
+        } catch (err) {
+
+          toast(err.message);
+
+        }
+
+      };
+  };
+
+/*************************************************
+ * MASTER USER / MASTER TEKNISI
+ *************************************************/
+
+async function renderUsers(){
+
+  const r =
+    await api(
+      "users"
+    );
+
+
+  const users =
+    r.data || [];
+
+  window.__alkerUsersCache = users;
+
+
+  const isLeader =
+    session.role ===
+    "LEADER";
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+
+          ${
+            isLeader
+              ? "Master Teknisi"
+              : "Master User"
+          }
+
+        </h2>
+
+
+        <p class="muted">
+
+          ${
+            isLeader
+
+              ? "Tambah, edit, dan nonaktifkan teknisi operasional."
+
+              : "Kelola seluruh akun pengguna sistem."
+
+          }
+
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn primary"
+        onclick="showUserForm()"
+      >
+
+        + Tambah Teknisi
+
+      </button>
+
+    </div>
+
+
+    <!-- =====================================
+         STATISTIK
+    ====================================== -->
+
+    <div class="grid cards">
+
+      ${metric(
+        "Total Teknisi",
+        users.filter(
+          x =>
+            x.role ===
+            "TEKNISI"
+        ).length,
+        "orang"
+      )}
+
+
+      ${metric(
+        "Teknisi Aktif",
+        users.filter(
+          x =>
+            x.role ===
+            "TEKNISI" &&
+            x.active === "Y"
+        ).length,
+        "orang"
+      )}
+
+
+      ${metric(
+        "Teknisi Nonaktif",
+        users.filter(
+          x =>
+            x.role ===
+            "TEKNISI" &&
+            x.active === "N"
+        ).length,
+        "orang"
+      )}
+
+    </div>
+
+
+    <div style="height:15px"></div>
+
+
+    <div class="card">
+
+      <div class="table-wrap">
+
+        <table class="table">
+
+          <thead>
+
+            <tr>
+
+              <th>
+                NAMA
+              </th>
+
+              <th>
+                USERNAME
+              </th>
+
+              <th>
+                LOKER / DIVISI
+              </th>
+
+              ${!isLeader ? `<th>LEADER</th>` : ""}
+
+              <th>
+                STATUS
+              </th>
+
+              <th>
+                AKSI
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              users
+                .map(
+                  x => `
+
+                    <tr>
+
+                      <td>
+
+                        <strong>
+                          ${esc(
+                            x.name
+                          )}
+                        </strong>
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.username
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        ${esc(
+                          x.loker ||
+                          "-"
+                        )}
+
+                      </td>
+
+                      ${!isLeader ? `<td>${esc(x.role === "TEKNISI" ? (x.leaderName || "Belum ditentukan") : "—")}</td>` : ""}
+
+                      <td>
+
+                        ${
+                          x.active ===
+                          "Y"
+
+                            ? badge(
+                                "AKTIF"
+                              )
+
+                            : badge(
+                                "NONAKTIF"
+                              )
+                        }
+
+                      </td>
+
+
+                      <td>
+
+                        <div
+                          class="actions"
+                        >
+
+                          <button
+                            class="btn secondary"
+                            onclick='showUserForm(
+                              ${JSON.stringify(x)}
+                            )'
+                          >
+                            Edit
+                          </button>
+
+
+                          ${
+                            x.role ===
+                              "TEKNISI" &&
+                            x.active ===
+                              "Y"
+
+                              ? `
+
+                                <button
+                                  class="btn danger"
+                                  onclick="deleteUser(
+                                    '${esc(
+                                      x.userId
+                                    )}',
+                                    '${esc(
+                                      x.name
+                                    )}'
+                                  )"
+                                >
+                                  Nonaktifkan
+                                </button>
+
+                              `
+
+                              : ""
+
+                          }
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join("") ||
+
+              `
+
+                <tr>
+
+                  <td colspan="${isLeader ? 5 : 6}">
+
+                    <div
+                      class="empty"
+                    >
+                      Belum ada teknisi.
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+window.showUserForm = function(user = {}){
+
+  const isEdit =
+    Boolean(user.userId);
+
+  const isLeader =
+    session.role === "LEADER";
+
+
+  openModal(
+
+    isEdit
+      ? "Edit User"
+      : "Tambah User",
+
+    `
+
+      <form id="userForm">
+
+        <div class="form-grid">
+
+          <label>
+            Nama Lengkap
+
+            <input
+              name="name"
+              value="${esc(user.name || "")}"
+              required
+            >
+          </label>
+
+
+          <label>
+            Username
+
+            <input
+              name="username"
+              value="${esc(user.username || "")}"
+              required
+            >
+          </label>
+
+
+          <label>
+            Password
+            ${
+              isEdit
+                ? "<small class='muted'>Kosongkan jika tidak ingin mengganti.</small>"
+                : ""
+            }
+
+            <input
+              name="password"
+              type="password"
+              ${isEdit ? "" : "required"}
+            >
+          </label>
+
+
+          <label>
+            Role
+
+            ${
+              isLeader
+
+                ? `
+                  <input
+                    value="TEKNISI"
+                    readonly
+                  >
+
+                  <input
+                    type="hidden"
+                    name="role"
+                    value="TEKNISI"
+                  >
+                `
+
+                : `
+                  <select name="role" required>
+
+                    <option value="">
+                      Pilih Role
+                    </option>
+
+                    <option value="TEKNISI"
+                      ${
+                        user.role === "TEKNISI"
+                          ? "selected"
+                          : ""
+                      }>
+                      TEKNISI
+                    </option>
+
+                    <option value="LEADER"
+                      ${
+                        user.role === "LEADER"
+                          ? "selected"
+                          : ""
+                      }>
+                      LEADER
+                    </option>
+
+                    <option value="SPV_GUDANG"
+                      ${
+                        user.role === "SPV_GUDANG"
+                          ? "selected"
+                          : ""
+                      }>
+                      SPV GUDANG
+                    </option>
+
+                    <option value="ADMIN"
+                      ${
+                        user.role === "ADMIN"
+                          ? "selected"
+                          : ""
+                      }>
+                      ADMIN
+                    </option>
+
+                  </select>
+                `
+            }
+
+          </label>
+
+
+<label>
+
+  Loker / Divisi Teknisi
+
+  ${
+    isLeader
+      ? `
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
+
+          <option value="">
+            Pilih Loker / Divisi
+          </option>
+
+          <option value="IOAN / ASSURANCE" ${user.loker === "IOAN / ASSURANCE" ? "selected" : ""}>
+            IOAN / ASSURANCE
+          </option>
+
+          <option value="PSB / FULFILLMENT" ${user.loker === "PSB / FULFILLMENT" ? "selected" : ""}>
+            PSB / FULFILLMENT
+          </option>
+
+          <option value="MAINTENANCE / OSP" ${user.loker === "MAINTENANCE / OSP" ? "selected" : ""}>
+            MAINTENANCE / OSP
+          </option>
+
+        </select>
+      `
+      : `
+        <select
+          name="loker"
+          id="userLoker"
+          required
+        >
+
+          <option value="">
+            Pilih Loker
+          </option>
+
+          <option value="IOAN / ASSURANCE" ${user.loker === "IOAN / ASSURANCE" ? "selected" : ""}>
+            IOAN / ASSURANCE
+          </option>
+
+          <option value="PSB / FULFILLMENT" ${user.loker === "PSB / FULFILLMENT" ? "selected" : ""}>
+            PSB / FULFILLMENT
+          </option>
+
+          <option value="MAINTENANCE / OSP" ${user.loker === "MAINTENANCE / OSP" ? "selected" : ""}>
+            MAINTENANCE / OSP
+          </option>
+
+          <option value="LEADER" ${user.loker === "LEADER" ? "selected" : ""}>
+            LEADER
+          </option>
+
+          <option value="GUDANG" ${user.loker === "GUDANG" ? "selected" : ""}>
+            GUDANG
+          </option>
+
+          <option value="ADMIN" ${user.loker === "ADMIN" ? "selected" : ""}>
+            ADMIN
+          </option>
+
+        </select>
+      `
+  }
+
+</label>
+
+${!isLeader ? `
+<label id="leaderAssignmentField" style="${(user.role || "") === "TEKNISI" ? "" : "display:none"}">
+  Leader Penanggung Jawab
+  <select name="leaderId" id="userLeaderId">
+    <option value="">Belum ditentukan</option>
+    ${(window.__alkerUsersCache || []).filter(x => x.role === "LEADER" && x.active === "Y").map(x => `<option value="${esc(x.userId)}" ${String(user.leaderId || "") === String(x.userId) ? "selected" : ""}>${esc(x.name)} (${esc(x.loker || "LEADER")})</option>`).join("")}
+  </select>
+  <small class="muted">Pilih Leader yang bertanggung jawab atas teknisi ini.</small>
+</label>
+` : ""}
+
+<label>
+            Status
+
+            <select name="active">
+
+              <option
+                value="Y"
+                ${
+                  user.active !== "N"
+                    ? "selected"
+                    : ""
+                }
+              >
+                AKTIF
+              </option>
+
+              <option
+                value="N"
+                ${
+                  user.active === "N"
+                    ? "selected"
+                    : ""
+                }
+              >
+                NONAKTIF
+              </option>
+
+            </select>
+
+          </label>
+
+        </div>
+
+
+        <div
+          class="actions"
+          style="margin-top:15px"
+        >
+
+          <button
+            type="button"
+            class="btn secondary"
+            onclick="closeModal()"
+          >
+            Batal
+          </button>
+
+          <button
+            type="submit"
+            class="btn primary"
+          >
+            Simpan User
+          </button>
+
+        </div>
+
+      </form>
+
+    `
+  );
+
+
+  const roleSelect = $("userForm").querySelector('[name="role"]');
+  if(roleSelect && !isLeader) {
+    roleSelect.addEventListener("change", () => {
+      const field = $("leaderAssignmentField");
+      if(field) field.style.display = roleSelect.value === "TEKNISI" ? "" : "none";
+    });
+  }
+
+  $("userForm").onsubmit =
+    async e => {
+
+      e.preventDefault();
+
+      const f =
+        e.target;
+
+      try{
+
+        await api(
+          "saveUser",
+          {
+
+            userId:
+              user.userId || "",
+
+            name:
+              f.name.value,
+
+            username:
+              f.username.value,
+
+            password:
+              f.password.value,
+
+            role:
+              f.role.value,
+
+            loker:
+              f.loker.value,
+
+            leaderId:
+              f.leaderId ? f.leaderId.value : "",
+
+            active:
+              f.active.value
+
+          }
+        );
+
+
+        closeModal();
+
+        toast(
+          isEdit
+            ? "User berhasil diperbarui."
+            : "User berhasil dibuat."
+        );
+
+
+        await renderUsers();
+
+
+      }catch(err){
+
+        toast(
+          err.message
+        );
+
+      }
+
+    };
+
+};
+
+/*************************************************
+ * NONAKTIFKAN TEKNISI
+ *************************************************/
+
+window.deleteUser =
+  async function(
+    userId,
+    userName
+  ){
+
+    if(!userId){
+
+      toast(
+        "ID teknisi tidak ditemukan."
+      );
+
+      return;
+
+    }
+
+
+    const yakin =
+      confirm(
+        "Nonaktifkan teknisi " +
+        userName +
+        "?\n\n" +
+        "Teknisi tidak akan bisa login lagi.\n" +
+        "Data inventory dan riwayat tetap disimpan."
+      );
+
+
+    if(!yakin){
+
+      return;
+
+    }
+
+
+    try{
+
+      await api(
+        "deleteUser",
+        {
+          userId:
+            userId
+        }
+      );
+
+
+      toast(
+        "Teknisi berhasil dinonaktifkan."
+      );
+
+
+      await renderUsers();
+
+
+    }catch(err){
+
+      toast(
+        err.message ||
+        "Gagal menonaktifkan teknisi."
+      );
+
+    }
+
+  };
+  
+/*************************************************
+ * AUDIT
+ *************************************************/
+
+async function renderAudit() {
+
+  const r =
+    await api(
+      "audit"
+    );
+
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Audit Trail
+        </h2>
+
+        <p class="muted">
+          Catatan aktivitas sistem.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Deskripsi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            (r.data || [])
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+                      ${esc(x.date)}
+                    </td>
+
+                    <td>
+                      ${esc(x.actor)}
+                    </td>
+
+                    <td>
+                      ${esc(x.action)}
+                    </td>
+
+                    <td>
+                      ${esc(x.description)}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("") ||
+
+            `<tr>
+
+              <td colspan="4">
+
+                <div class="empty">
+                  Belum ada audit.
+                </div>
+
+              </td>
+
+            </tr>`
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/*************************************************
+ * SESSION RESTORE
+ *************************************************/
+
+(async () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("alker_session") || "null");
+    if (!saved) return;
+
+    let startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+    // Existing sessions get a one-hour window starting from their first reload after this update.
+    if (!startedAt || !Number.isFinite(startedAt)) {
+      startedAt = Date.now();
+      localStorage.setItem("alker_session_started_at", String(startedAt));
+    }
+
+    if (Date.now() - startedAt >= 60 * 60 * 1000) {
+      localStorage.removeItem("alker_session");
+      localStorage.removeItem("alker_session_started_at");
+      session = null;
+      return;
+    }
+
+    session = saved;
+    const v = await api("me");
+    if (v.ok && v.data?.session) {
+      session = v.data.session;
+      localStorage.setItem("alker_session", JSON.stringify(session));
+      await initApp();
+    } else {
+      localStorage.removeItem("alker_session");
+      localStorage.removeItem("alker_session_started_at");
+      session = null;
+    }
+  } catch (e) {
+    console.warn("Session lama tidak valid:", e.message);
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+    session = null;
+  }
+})();
+function initialStatusBadge(status){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
+
+
+  if(
+    s ===
+    "MENUNGGU VERIFIKASI"
+  ){
+
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
+
+  }
+
+
+  if(s === "REVISI"){
+
+    return `
+      <span class="badge red">
+        PERLU REVISI
+      </span>
+    `;
+
+  }
+
+
+  if(s === "APPROVED"){
+
+    return `
+      <span class="badge green">
+        APPROVED
+      </span>
+    `;
+
+  }
+
+
+  if(
+    s === "DITOLAK"
+  ){
+
+    return `
+      <span class="badge red">
+        DITOLAK
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge">
+      ${esc(status || "-")}
+    </span>
+  `;
+
+}
+function renderInventorySimpleTable(
+  data
+){
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="table">
+
+        <thead>
+
+          <tr>
+
+            <th>ALKER</th>
+
+            <th>Merk / Type</th>
+
+            <th>Serial Number</th>
+
+            <th>Kondisi</th>
+
+            <th>Status</th>
+
+            <th>Nilai</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            data
+              .map(
+                x => `
+
+                  <tr>
+
+                    <td>
+
+                      <strong>
+                        ${esc(
+                          x.itemName
+                        )}
+                      </strong>
+
+                      <div
+                        class="small muted"
+                      >
+                        ${esc(
+                          x.inventoryId
+                        )}
+                      </div>
+
+                    </td>
+
+
+                    <td>
+
+                      ${esc(
+                        x.brand || "-"
+                      )}
+
+                      /
+
+                      ${esc(
+                        x.type || "-"
+                      )}
+
+                    </td>
+
+
+                    <td>
+                      ${esc(
+                        x.serialNumber ||
+                        "-"
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.condition
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${badge(
+                        x.status
+                      )}
+                    </td>
+
+
+                    <td>
+                      ${money(
+                        x.price
+                      )}
+                    </td>
+
+                  </tr>
+
+                `
+              )
+              .join("")
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+}
+async function loadPhotoPreview_(
+  photoUrl
+){
+
+  if(!photoUrl){
 
     return "";
 
   }
 
 
-  /*
-   * Format:
-   * https://drive.google.com/file/d/FILE_ID/view
-   */
+  try{
 
-  let m =
-    s.match(
-      /\/file\/d\/([a-zA-Z0-9_-]+)/
+    const r =
+      await api(
+        "photoPreview",
+        {
+          photoUrl:
+            photoUrl
+        }
+      );
+
+
+    return r.data?.dataUrl || "";
+
+  }catch(e){
+
+    console.error(
+      "PHOTO PREVIEW:",
+      e
     );
 
+    return "";
 
-  if(m){
+  }
 
-    return m[1];
+}
+function photoBox_(
+  title,
+  dataUrl
+){
+
+  if(!dataUrl){
+
+    return `
+
+      <div class="photo-box empty">
+
+        <div class="photo-title">
+          ${esc(title)}
+        </div>
+
+        <div class="photo-empty">
+          Foto tidak tersedia
+        </div>
+
+      </div>
+
+    `;
 
   }
 
 
-  /*
-   * Format:
-   * ?id=FILE_ID
-   */
+  return `
 
-  m =
-    s.match(
-      /[?&]id=([a-zA-Z0-9_-]+)/
+    <div class="photo-box">
+
+      <div class="photo-title">
+        ${esc(title)}
+      </div>
+
+      <img
+        src="${dataUrl}"
+        alt="${esc(title)}"
+        class="photo-preview"
+        onclick="openPhotoViewer_('${dataUrl}')"
+      >
+
+    </div>
+
+  `;
+
+}
+function openPhotoViewer_(
+  dataUrl
+){
+
+  const old =
+    document.getElementById(
+      "photoViewer"
     );
 
 
-  if(m){
+  if(old){
 
-    return m[1];
+    old.remove();
 
   }
 
 
-  /*
-   * Kalau suatu saat database
-   * langsung menyimpan File ID.
-   */
+  const div =
+    document.createElement(
+      "div"
+    );
 
+
+  div.id =
+    "photoViewer";
+
+
+  div.className =
+    "photo-viewer";
+
+
+  div.innerHTML = `
+
+    <button
+      class="photo-viewer-close"
+      onclick="
+        document.getElementById(
+          'photoViewer'
+        ).remove()
+      "
+    >
+      ×
+    </button>
+
+    <img
+      src="${dataUrl}"
+      class="photo-viewer-img"
+    >
+
+  `;
+
+
+  document.body.appendChild(
+    div
+  );
+
+}
+window.showInitialVerificationDetail =
+  async x => {
+
+    openModal(
+      "Detail Verifikasi ALKER",
+      `
+        <div class="detail-grid">
+
+          <div class="detail-box">
+            <span>Teknisi</span>
+            <strong>
+              ${esc(x.technician)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Loker</span>
+            <strong>
+              ${esc(x.loker)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>ALKER</span>
+            <strong>
+              ${esc(x.itemName)}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Merk</span>
+            <strong>
+              ${esc(x.brand || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Type</span>
+            <strong>
+              ${esc(x.type || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Serial Number</span>
+            <strong>
+              ${esc(x.serialNumber || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Kondisi</span>
+            <strong>
+              ${esc(x.condition || "-")}
+            </strong>
+          </div>
+
+          <div class="detail-box">
+            <span>Status Pemberian</span>
+            <strong>
+              ${esc(
+                x.givenStatus ||
+                "BELUM DITENTUKAN"
+              )}
+            </strong>
+          </div>
+
+        </div>
+
+        <div
+          id="initialPhotoArea"
+          style="margin-top:18px"
+        >
+          <div class="empty">
+            Memuat foto...
+          </div>
+        </div>
+      `
+    );
+
+
+    const photos = [];
+
+
+    if(x.photoUrl){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.photoUrl
+        );
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto ALKER",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    if(x.serialPhotoUrl){
+
+      const dataUrl =
+        await loadPhotoPreview_(
+          x.serialPhotoUrl
+        );
+
+      if(dataUrl){
+
+        photos.push(
+          photoBox_(
+            "Foto Serial / Label",
+            dataUrl
+          )
+        );
+
+      }
+
+    }
+
+
+    const area =
+      $("initialPhotoArea");
+
+
+    if(area){
+
+      area.innerHTML =
+        photos.length
+          ? `
+            <div class="photo-grid">
+              ${photos.join("")}
+            </div>
+          `
+          : `
+            <div class="photo-empty">
+              Foto belum tersedia.
+            </div>
+          `;
+
+    }
+
+  };
+  window.showInitialRevisionForm =
+  async initial => {
+
+    const r =
+      await api(
+        "masters"
+      );
+
+
+    const items =
+      r.data?.items ||
+      [];
+
+
+    openModal(
+
+      "Perbaiki Pengajuan ALKER",
+
+      `
+
+        <p class="muted">
+
+          Gudang meminta perbaikan
+          data ALKER berikut.
+
+        </p>
+
+
+        <div
+          class="card"
+          style="margin-bottom:15px"
+        >
+
+          <strong>
+            ${esc(
+              initial.itemName
+            )}
+          </strong>
+
+          <p class="danger-text">
+
+            ${
+              esc(
+                initial.reviewNote ||
+                "Mohon perbaiki data."
+              )
+            }
+
+          </p>
+
+        </div>
+
+
+        <form id="initialRevisionForm">
+
+          <div class="form-grid">
+
+            <input
+              type="hidden"
+              name="initialId"
+              value="${esc(
+                initial.initialId
+              )}"
+            >
+
+
+            <label>
+
+              Alker
+
+              <input
+                value="${esc(
+                  initial.itemName
+                )}"
+                disabled
+              >
+
+            </label>
+
+
+            <label>
+
+              Merk
+
+              <div id="revisionBrandWrap">                  <input                    name="brand"                    value="${esc(                      initial.brand ||                      ""                    )}"                  >                </div>
+
+            </label>
+
+
+            <label>
+
+              Type
+
+              <input
+                name="type"
+                value="${esc(
+                  initial.type ||
+                  ""
+                )}"
+              >
+
+            </label>
+
+
+            <label>
+
+              Serial Number
+
+              <input
+                name="serialNumber"
+                value="${esc(
+                  initial.serialNumber ||
+                  ""
+                )}"
+              >
+
+            </label>
+
+
+            <label>
+
+              Kondisi
+
+              <select
+                name="condition"
+              >
+
+                <option
+                  ${
+                    initial.condition ===
+                    "BAIK"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  BAIK
+                </option>
+
+                <option
+                  ${
+                    initial.condition ===
+                    "RUSAK RINGAN"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  RUSAK RINGAN
+                </option>
+
+                <option
+                  ${
+                    initial.condition ===
+                    "RUSAK BERAT"
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  RUSAK BERAT
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+              >${esc(
+                initial.note ||
+                ""
+              )}</textarea>
+
+            </label>
+
+
+            <label>
+
+              Foto Alker Baru
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+            </label>
+
+
+            <label>
+
+              Foto Serial Baru
+
+              <input
+                name="serialPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+            </label>
+          </div>
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Kirim Ulang
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+  
+  const revisionBrandWrap =
+    $("revisionBrandWrap");
+
+  if(revisionBrandWrap){
+
+    const revisionItem = {
+      itemName: initial.itemName
+    };
+
+    revisionBrandWrap.innerHTML =
+      splicerBrandFieldHtml_(
+        revisionItem,
+        initial.brand || ""
+      );
+
+  }
+
+  $("initialRevisionForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try{
+
+          await api(
+            "initialResubmit",
+            {
+
+              initialId:
+                f.initialId.value,
+
+              brand:
+                f.brand.value,
+
+              type:
+                f.type.value,
+
+              serialNumber:
+                f.serialNumber.value,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                await fileToBase64(
+                  f.photo.files[0]
+                ),
+
+              serialPhoto:
+                await fileToBase64(
+                  f.serialPhoto.files[0]
+                )
+
+            }
+          );
+
+          closeModal();
+
+          toast(
+            "Perbaikan berhasil dikirim ke Gudang."
+          );
+          renderMyInventory();
+        }catch(err){
+
+          toast(
+            err.message
+          );
+        }
+      };
+
+  };
+  /*************************************************
+ * MASTER HARGA ALKER
+ * KHUSUS SPV GUDANG / ADMIN
+ *************************************************/
+
+async function renderMasterPrice() {
+
+  $("page").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h2>
+          Master Harga ALKER
+        </h2>
+
+        <p class="muted">
+          Gudang menentukan nilai aset berdasarkan nama ALKER. Splicer memiliki harga berbeda berdasarkan merek.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="masterPriceBody">
+
+      <div class="card">
+        Memuat master harga...
+      </div>
+
+    </div>
+
+  `;
+
+
+  try {
+
+    const r =
+      await api("masterPrices");
+
+
+    const data =
+      r.data || [];
+
+
+    $("masterPriceBody").innerHTML = `
+
+      <div class="grid cards">
+
+        ${metric(
+          "Total ALKER",
+          data.length,
+          "master harga"
+        )}
+
+        ${metric(
+          "Sudah Ada Harga",
+          data.filter(
+            x =>
+              Number(x.price || 0) > 0
+          ).length,
+          "item"
+        )}
+
+        ${metric(
+          "Belum Ada Harga",
+          data.filter(
+            x =>
+              Number(x.price || 0) <= 0
+          ).length,
+          "item"
+        )}
+
+      </div>
+
+
+      <div style="height:15px"></div>
+
+
+      <div class="card">
+
+        <div class="toolbar">
+
+          <input
+            id="masterPriceSearch"
+            placeholder="Cari nama ALKER..."
+          >
+
+        </div>
+
+
+        <div class="table-wrap">
+
+          <table class="table">
+
+            <thead>
+
+              <tr>
+
+                <th>ID</th>
+                <th>Nama ALKER</th>
+                <th>Kategori</th>
+                <th>Satuan</th>
+                <th>Harga Master</th>
+                <th>Status</th>
+                <th>Aksi</th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody id="masterPriceTable">
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    const draw = () => {
+
+      const q =
+        (
+          $("masterPriceSearch")?.value ||
+          ""
+        )
+          .toLowerCase()
+          .trim();
+
+
+      const filtered =
+        data.filter(
+          x =>
+            JSON.stringify(x)
+              .toLowerCase()
+              .includes(q)
+        );
+
+
+      $("masterPriceTable").innerHTML =
+
+        filtered
+          .map(
+            x => `
+
+              <tr>
+
+                <td>
+                  ${esc(x.itemId || "-")}
+                </td>
+
+                <td>
+
+                  <strong>
+                    ${esc(x.itemName || "-")}
+                  </strong>
+
+                </td>
+
+                <td>
+                  ${esc(x.category || "-")}
+                </td>
+
+                <td>
+                  ${esc(x.unit || "UNIT")}
+                </td>
+
+                <td>
+
+                  <strong>
+                    ${
+                      x.priceMode === "BY_BRAND"
+                        ? "Per Merek"
+                        : money(x.price)
+                    }
+                  </strong>
+
+                </td>
+
+                <td>
+
+                  ${
+                    Number(x.price || 0) > 0
+                      ? badge("AKTIF")
+                      : badge("BELUM DITENTUKAN")
+                  }
+
+                </td>
+
+                <td>
+
+                  ${
+                    x.priceMode === "BY_BRAND"
+                      ? `
+                        <button
+                          class="btn secondary"
+                          onclick='showSplicerBrandPriceForm(${JSON.stringify(x)})'
+                        >
+                          Harga per Merek
+                        </button>
+                      `
+                      : `
+                        <button
+                          class="btn secondary"
+                          onclick='showMasterPriceForm(${JSON.stringify(x)})'
+                        >
+                          Ubah Harga
+                        </button>
+                      `
+                  }
+
+                </td>
+
+              </tr>
+
+            `
+          )
+          .join("") ||
+
+        `
+
+          <tr>
+
+            <td colspan="7">
+
+              <div class="empty">
+                Data ALKER tidak ditemukan.
+              </div>
+
+            </td>
+
+          </tr>
+
+        `;
+
+    };
+
+
+    $("masterPriceSearch").oninput =
+      draw;
+
+
+    draw();
+
+
+  } catch (err) {
+
+    $("masterPriceBody").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Gagal memuat Master Harga
+        </strong>
+
+        <p class="danger-text">
+          ${esc(err.message)}
+        </p>
+
+      </div>
+
+    `;
+
+  }
+
+}
+
+
+/*************************************************
+ * FORM UBAH HARGA MASTER
+ *************************************************/
+
+
+window.showSplicerBrandPriceForm =
+  async x => {
+
+    try{
+
+      const r =
+        await api(
+          "masterBrandPrices",
+          {
+            itemId:
+              x.itemId
+          }
+        );
+
+      const brands =
+        r.data || [];
+
+      openModal(
+        "Harga Splicer per Merek",
+        `
+          <div class="card">
+
+            <div class="detail-grid">
+
+              <div class="detail-box">
+                <span>ID ALKER</span>
+                <strong>${esc(x.itemId || "-")}</strong>
+              </div>
+
+              <div class="detail-box">
+                <span>ALKER</span>
+                <strong>${esc(x.itemName || "Splicer")}</strong>
+              </div>
+
+            </div>
+
+          </div>
+
+          <form
+            id="splicerBrandPriceForm"
+            style="margin-top:15px"
+          >
+
+            ${brands.map(b => `
+              <label style="margin-bottom:10px">
+
+                ${esc(b.brand)}
+
+                <input
+                  type="number"
+                  min="0"
+                  name="price_${esc(b.priceId)}"
+                  data-price-id="${esc(b.priceId)}"
+                  data-brand="${esc(b.brand)}"
+                  value="${Number(b.price || 0)}"
+                  required
+                >
+
+              </label>
+            `).join("")}
+
+            <div
+              class="actions"
+              style="margin-top:15px"
+            >
+
+              <button
+                type="button"
+                class="btn secondary"
+                onclick="closeModal()"
+              >
+                Batal
+              </button>
+
+              <button
+                type="submit"
+                class="btn primary"
+              >
+                Simpan Semua Harga
+              </button>
+
+            </div>
+
+          </form>
+        `
+      );
+
+      $("splicerBrandPriceForm").onsubmit =
+        async e => {
+
+          e.preventDefault();
+
+          const f = e.target;
+          const btn =
+            f.querySelector(
+              'button[type="submit"]'
+            );
+
+          if(btn?.disabled) return;
+
+          if(btn){
+            btn.disabled = true;
+            btn.textContent =
+              "⏳ Menyimpan...";
+          }
+
+          try{
+
+            const prices =
+              [...f.querySelectorAll(
+                "input[data-brand]"
+              )].map(input => ({
+                brand:
+                  input.dataset.brand,
+                price:
+                  input.value
+              }));
+
+            await api(
+              "updateMasterBrandPrices",
+              {
+                itemId:
+                  x.itemId,
+                prices
+              }
+            );
+
+            closeModal();
+
+            toast(
+              "Harga Splicer per merek berhasil diperbarui."
+            );
+
+            await renderMasterPrice();
+
+          }catch(err){
+
+            if(btn){
+              btn.disabled = false;
+              btn.textContent =
+                "Simpan Semua Harga";
+            }
+
+            toast(
+              err.message ||
+              "Gagal mengubah harga Splicer."
+            );
+
+          }
+
+        };
+
+    }catch(err){
+
+      toast(
+        err.message ||
+        "Gagal memuat harga Splicer."
+      );
+
+    }
+
+  };
+
+window.showMasterPriceForm =
+  x => {
+
+    openModal(
+
+      "Ubah Harga Master ALKER",
+
+      `
+
+        <div class="card">
+
+          <div class="detail-grid">
+
+            <div class="detail-box">
+
+              <span>
+                ID ALKER
+              </span>
+
+              <strong>
+                ${esc(x.itemId || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Nama ALKER
+              </span>
+
+              <strong>
+                ${esc(x.itemName || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Kategori
+              </span>
+
+              <strong>
+                ${esc(x.category || "-")}
+              </strong>
+
+            </div>
+
+
+            <div class="detail-box">
+
+              <span>
+                Harga Saat Ini
+              </span>
+
+              <strong>
+                ${money(x.price)}
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <form
+          id="masterPriceForm"
+          style="margin-top:15px"
+        >
+
+          <input
+            type="hidden"
+            name="itemId"
+            value="${esc(x.itemId || "")}"
+          >
+
+
+          <label>
+
+            Harga Master Baru
+
+            <input
+              name="price"
+              type="number"
+              min="0"
+              value="${Number(x.price || 0)}"
+              required
+            >
+
+          </label>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Simpan Harga
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("masterPriceForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+
+        const f =
+          e.target;
+
+
+        const btn =
+          f.querySelector(
+            'button[type="submit"]'
+          );
+
+
+        if (
+          btn &&
+          btn.disabled
+        ) {
+
+          return;
+
+        }
+
+
+        if (btn) {
+
+          btn.disabled = true;
+
+          btn.textContent =
+            "⏳ Menyimpan...";
+
+        }
+
+
+        try {
+
+          await api(
+            "updateMasterPrice",
+            {
+
+              itemId:
+                f.itemId.value,
+
+              price:
+                f.price.value
+
+            }
+          );
+
+
+          closeModal();
+
+
+          toast(
+            "Harga master ALKER berhasil diperbarui."
+          );
+
+
+          await renderMasterPrice();
+
+
+        } catch (err) {
+
+          if (btn) {
+
+            btn.disabled =
+              false;
+
+            btn.textContent =
+              "Simpan Harga";
+
+          }
+
+
+          toast(
+            err.message ||
+            "Gagal mengubah harga master."
+          );
+
+        }
+
+      };
+
+  };
+  window.showReturnForm =
+  async inventory => {
+
+    openModal(
+
+      "Pengembalian ALKER",
+
+      `
+
+        <div class="card"
+             style="margin-bottom:15px">
+
+          <strong>
+            ${esc(
+              inventory.itemName
+            )}
+          </strong>
+
+          <div class="small muted">
+
+            ID:
+            ${esc(
+              inventory.inventoryId
+            )}
+
+            <br>
+
+            SN:
+            ${esc(
+              inventory.serialNumber ||
+              "-"
+            )}
+
+          </div>
+
+        </div>
+
+
+        <form id="returnForm">
+
+          <div class="form-grid">
+
+
+            <label>
+
+              Kondisi Saat Dikembalikan
+
+              <select
+                name="condition"
+                required
+              >
+
+                <option value="BAIK">
+                  BAIK
+                </option>
+
+                <option value="RUSAK RINGAN">
+                  RUSAK RINGAN
+                </option>
+
+                <option value="RUSAK BERAT">
+                  RUSAK BERAT
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label>
+
+              Foto ALKER
+
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                required
+              >
+
+              <small class="muted">
+                Wajib foto kondisi ALKER
+                saat diserahkan.
+              </small>
+
+            </label>
+
+
+            <label>
+
+              Foto Serial / Label
+
+              <input
+                name="serialPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              >
+
+              <small class="muted">
+                Opsional.
+              </small>
+
+            </label>
+
+
+            <label class="full-col">
+
+              Keterangan
+
+              <textarea
+                name="note"
+                placeholder="Keterangan kondisi ALKER saat dikembalikan..."
+              ></textarea>
+
+            </label>
+
+
+          </div>
+
+
+          <div
+            class="card"
+            style="
+              margin-top:15px;
+              background:#fff8e1;
+            "
+          >
+
+            <strong>
+              ⚠️ Perhatian
+            </strong>
+
+            <p class="muted">
+
+              Setelah dikirim, ALKER akan
+              berstatus
+              <strong>
+                MENUNGGU VERIFIKASI
+              </strong>.
+
+              ALKER belum menjadi stok Gudang
+              sampai diverifikasi oleh SPV Gudang.
+
+            </p>
+
+          </div>
+
+
+          <div
+            class="actions"
+            style="margin-top:15px"
+          >
+
+            <button
+              type="button"
+              class="btn secondary"
+              onclick="closeModal()"
+            >
+              Batal
+            </button>
+
+
+            <button
+              type="submit"
+              class="btn warning"
+            >
+              Kirim Pengembalian
+            </button>
+
+          </div>
+
+        </form>
+
+      `
+    );
+
+
+    $("returnForm").onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const f =
+          e.target;
+
+
+        try{
+
+          const photo =
+            await fileToBase64(
+              f.photo.files[0]
+            );
+
+
+          if(!photo){
+
+            throw new Error(
+              "Foto ALKER wajib diupload."
+            );
+
+          }
+
+
+          const serialPhoto =
+            f.serialPhoto.files[0]
+              ? await fileToBase64(
+                  f.serialPhoto.files[0]
+                )
+              : "";
+
+
+          await api(
+            "returnItem",
+            {
+
+              inventoryId:
+                inventory.inventoryId,
+
+              condition:
+                f.condition.value,
+
+              note:
+                f.note.value,
+
+              photo:
+                photo,
+
+              serialPhoto:
+                serialPhoto
+
+            }
+          );
+
+
+          closeModal();
+
+
+          toast(
+            "Pengembalian berhasil diajukan ke Gudang."
+          );
+
+
+          await renderReturns();
+
+
+        }catch(err){
+
+          toast(
+            err.message ||
+            "Gagal mengajukan pengembalian."
+          );
+
+        }
+
+      };
+
+  };
+  function returnStatusBadge_(
+  status
+){
+
+  const s =
+    String(
+      status || ""
+    ).toUpperCase();
   if(
-    /^[a-zA-Z0-9_-]{20,}$/.test(s)
+    s ===
+    "MENUNGGU VERIFIKASI"
   ){
 
-    return s;
+    return `
+      <span class="badge yellow">
+        MENUNGGU VERIFIKASI
+      </span>
+    `;
 
   }
+  if(
+    s ===
+    "DITERIMA GUDANG"
+  ){
 
+    return `
+      <span class="badge green">
+        DITERIMA GUDANG
+      </span>
+    `;
 
-  return "";
+  }
+  if(
+    s ===
+    "REVISI"
+  ){
+    return `
+      <span class="badge red">
+        REVISI
+      </span>
+    `;
+
+  }
+  return badge(
+    status || "-"
+  );
 
 }
