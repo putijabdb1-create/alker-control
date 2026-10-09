@@ -8246,11 +8246,11 @@ window.showWarehouseStockForm = async () => {
             <textarea name="note" placeholder="Catatan kondisi atau hasil pengecekan"></textarea>
           </label>
         </div>
-        <div class="card" style="margin-top:12px;padding:12px">
+        <div class="card" style="margin-top:6px;padding:6px">
           <strong>Catatan validasi</strong>
           <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap dicatat. Jika quantity lebih dari 1, data dibuat per unit; nomor seri dapat dicatat pada keterangan jika setiap unit berbeda.</p>
         </div>
-        <div class="actions" style="margin-top:15px">
+        <div class="actions" style="margin-top:10px">
           <button type="submit" class="btn primary" id="warehouseStockSaveBtn">Simpan Validasi Stok</button>
         </div>
       </form>`);
@@ -8584,8 +8584,8 @@ window.showReceivingForm =
           <div
             class="card"
             style="
-              margin-top:15px;
-              padding:14px;
+              margin-top:10px;
+              padding:6px;
             "
           >
 
