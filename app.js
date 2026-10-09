@@ -1129,14 +1129,14 @@ async function renderDashboard(){
 
             <thead>
               ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? `
-                <tr><th>NAMA ALKER</th><th>JUMLAH</th><th>DILAPORKAN OLEH</th><th>KONDISI</th><th>LOKER / LOKASI</th><th>NILAI</th></tr>
+                <tr><th>NAMA ALKER</th><th>JUMLAH</th><th>BAIK</th><th>RUSAK RINGAN</th><th>RUSAK BERAT</th><th>NILAI</th></tr>
               ` : `
                 <tr><th>LOKER / LOKASI</th><th>JUMLAH</th><th>NILAI</th></tr>
               `}
             </thead>
             <tbody>
               ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? (
-                (d.inventoryDetails || []).map(x => `<tr><td>${esc(x.itemName || "-")}</td><td>${x.count || 0}</td><td>${esc(x.holder || "-")}</td><td>${badge(x.condition || "-")}</td><td>${esc(x.loker || "-")} / ${esc(x.location || "-")}</td><td>${money(x.value || 0)}</td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">Belum ada inventory.</div></td></tr>`
+                (d.inventoryDetails || []).map(x => `<tr><td><strong>${esc(x.itemName || "-")}</strong></td><td>${x.count || 0}</td><td>${x.baik || 0}</td><td>${x.rusakRingan || 0}</td><td>${x.rusakBerat || 0}</td><td>${money(x.value || 0)}</td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">Belum ada inventory.</div></td></tr>`
               ) : (
                 (d.locations || []).map(x => `<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.value)}</td></tr>`).join("") || `<tr><td colspan="3"><div class="empty">Belum ada inventory.</div></td></tr>`
               )}
@@ -1591,7 +1591,7 @@ function renderTechnicianDashboard_(
 
                 <tr>
 
-                  <td colspan="5">
+                  <td colspan="${isLeader ? 5 : 6}">
 
                     <div class="empty">
 
@@ -7048,13 +7048,16 @@ window.showLeaderOwnInventoryForm = async () => {
 };
 
 async function renderLeaderIssues() {
-  const r = await api("inventory", { scope: "loker" });
-  const data = (r.data || []).filter(x => String(x.location || "").toUpperCase() === "TEKNISI");
-  $("page").innerHTML = `
-    <div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Daftar ALKER yang sudah tercatat/dilaporkan oleh teknisi di loker ${esc(session.loker || "-")}.</p></div></div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>Nama ALKER</th><th>Nama Teknisi</th><th>Kondisi ALKER</th><th>Loker / Lokasi</th><th>Nilai</th></tr></thead><tbody>
-    ${data.length ? data.map(x => `<tr><td><strong>${esc(x.itemName || "-")}</strong><div class="muted">${esc(x.inventoryId || "")}</div></td><td>${esc(x.holder || x.technician || "-")}</td><td>${badge(x.condition || "BELUM DIKETAHUI")}</td><td>${esc(x.loker || "-")} / ${esc(x.location || "-")}</td><td>${money(x.price || 0)}</td></tr>`).join("") : `<tr><td colspan="5" class="muted">Belum ada ALKER yang dilaporkan/tercatat oleh teknisi di loker ini.</td></tr>`}
-    </tbody></table></div>`;
+  $("page").innerHTML = `<div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Pantau laporan awal teknisi di loker ${esc(session.loker || "-")}, termasuk yang masih menunggu verifikasi atau perlu revisi.</p></div></div><div id="leaderReports" class="card">Memuat laporan teknisi...</div>`;
+  try {
+    const r = await api("leaderInitialReports");
+    const data = r.data || [];
+    $("leaderReports").innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Nama Teknisi</th><th>Nama ALKER</th><th>Merk / Type</th><th>Serial Number</th><th>Kondisi</th><th>Status Laporan</th><th>Nilai</th></tr></thead><tbody>
+      ${data.length ? data.map(x => `<tr><td>${esc(x.date || "-")}</td><td><strong>${esc(x.technician || "-")}</strong></td><td>${esc(x.itemName || "-")}</td><td>${esc(x.brand || "-")} / ${esc(x.type || "-")}</td><td>${esc(x.serialNumber || "-")}</td><td>${badge(x.condition || "BELUM DIVERIFIKASI")}</td><td>${badge(x.status || "-" )}${x.reviewNote ? `<div class="small danger-text">${esc(x.reviewNote)}</div>` : ""}</td><td>${money(x.price || 0)}</td></tr>`).join("") : `<tr><td colspan="8"><div class="empty">Belum ada laporan ALKER dari teknisi di loker ini.</div></td></tr>`}
+      </tbody></table></div>`;
+  } catch (err) {
+    $("leaderReports").innerHTML = `<div class="danger-text">Gagal memuat laporan: ${esc(err.message || "Terjadi kesalahan")}</div>`;
+  }
 }
 
 async function renderTeamInventory() {
@@ -10327,6 +10330,8 @@ async function renderUsers(){
   const users =
     r.data || [];
 
+  window.__alkerUsersCache = users;
+
 
   const isLeader =
     session.role ===
@@ -10446,6 +10451,8 @@ async function renderUsers(){
                 LOKER / DIVISI
               </th>
 
+              ${!isLeader ? `<th>LEADER</th>` : ""}
+
               <th>
                 STATUS
               </th>
@@ -10497,6 +10504,7 @@ async function renderUsers(){
 
                       </td>
 
+                      ${!isLeader ? `<td>${esc(x.role === "TEKNISI" ? (x.leaderName || "Belum ditentukan") : "—")}</td>` : ""}
 
                       <td>
 
@@ -10574,7 +10582,7 @@ async function renderUsers(){
 
                 <tr>
 
-                  <td colspan="5">
+                  <td colspan="${isLeader ? 5 : 6}">
 
                     <div
                       class="empty"
@@ -10800,6 +10808,16 @@ window.showUserForm = function(user = {}){
 
 </label>
 
+${!isLeader ? `
+<label id="leaderAssignmentField" style="${(user.role || "") === "TEKNISI" ? "" : "display:none"}">
+  Leader Penanggung Jawab
+  <select name="leaderId" id="userLeaderId">
+    <option value="">Belum ditentukan</option>
+    ${(window.__alkerUsersCache || []).filter(x => x.role === "LEADER" && x.active === "Y").map(x => `<option value="${esc(x.userId)}" ${String(user.leaderId || "") === String(x.userId) ? "selected" : ""}>${esc(x.name)} (${esc(x.loker || "LEADER")})</option>`).join("")}
+  </select>
+  <small class="muted">Pilih Leader yang bertanggung jawab atas teknisi ini.</small>
+</label>
+` : ""}
 
 <label>
             Status
@@ -10863,6 +10881,14 @@ window.showUserForm = function(user = {}){
   );
 
 
+  const roleSelect = $("userForm").querySelector('[name="role"]');
+  if(roleSelect && !isLeader) {
+    roleSelect.addEventListener("change", () => {
+      const field = $("leaderAssignmentField");
+      if(field) field.style.display = roleSelect.value === "TEKNISI" ? "" : "none";
+    });
+  }
+
   $("userForm").onsubmit =
     async e => {
 
@@ -10894,6 +10920,9 @@ window.showUserForm = function(user = {}){
 
             loker:
               f.loker.value,
+
+            leaderId:
+              f.leaderId ? f.leaderId.value : "",
 
             active:
               f.active.value
