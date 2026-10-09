@@ -7432,12 +7432,10 @@ async function renderWarehouse(){
       </div>
 
 
-      <button
-        class="btn primary"
-        onclick="showReceivingForm()"
-      >
-        + Barang Masuk
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn" onclick="showWarehouseStockForm()">+ Validasi Stok Lama</button>
+        <button class="btn primary" onclick="showReceivingForm()">+ Barang Masuk</button>
+      </div>
 
     </div>
 
@@ -8198,6 +8196,91 @@ async function renderReceiving() {
   `;
 }
 
+
+/*************************************************
+ * VALIDASI STOK LAMA GUDANG
+ * Mencatat unit yang sudah ada secara fisik,
+ * bukan penerimaan barang baru.
+ *************************************************/
+window.showWarehouseStockForm = async () => {
+  try {
+    const r = await api("masters");
+    const items = r.data?.items || [];
+    if (!items.length) throw new Error("Master ALKER belum tersedia.");
+    openModal("Validasi Stok Lama Gudang", `
+      <form id="warehouseStockForm">
+        <div class="form-grid">
+          <label>ALKER
+            <select name="itemId" id="warehouseStockItemId" required>
+              ${items.map(x => `<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Merek
+            <input name="brand" placeholder="Merek ALKER" required>
+          </label>
+          <label>Tipe
+            <input name="type" placeholder="Tipe/model ALKER">
+          </label>
+          <label>Nomor Seri (SN)
+            <input name="serialNumber" placeholder="Masukkan nomor seri" required>
+          </label>
+          <label>Kondisi Fisik
+            <select name="condition" required>
+              <option value="BAIK">BAIK</option>
+              <option value="RUSAK RINGAN">RUSAK RINGAN</option>
+              <option value="RUSAK BERAT">RUSAK BERAT</option>
+              <option value="HILANG">HILANG</option>
+            </select>
+          </label>
+          <label>Foto ALKER
+            <input name="photo" type="file" accept="image/*" capture="environment" required>
+          </label>
+          <label>Foto Serial / Label
+            <input name="serialPhoto" type="file" accept="image/*" capture="environment">
+          </label>
+          <label class="full-col">Keterangan
+            <textarea name="note" placeholder="Catatan kondisi atau hasil pengecekan"></textarea>
+          </label>
+        </div>
+        <div class="card" style="margin-top:12px;padding:12px">
+          <strong>Catatan validasi</strong>
+          <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit berkondisi BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap tercatat sebagai acuan saat diterima teknisi.</p>
+        </div>
+        <div class="actions" style="margin-top:15px">
+          <button type="submit" class="btn primary" id="warehouseStockSaveBtn">Simpan Validasi Stok</button>
+        </div>
+      </form>`);
+    const form = $("warehouseStockForm");
+    const btn = $("warehouseStockSaveBtn");
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "⏳ Menyimpan...";
+      try {
+        await api("warehouseStockAdd", {
+          itemId: form.itemId.value,
+          brand: form.brand.value.trim(),
+          type: form.type.value.trim(),
+          serialNumber: form.serialNumber.value.trim(),
+          condition: form.condition.value,
+          note: form.note.value.trim(),
+          photo: await fileToBase64(form.photo.files[0]),
+          serialPhoto: await fileToBase64(form.serialPhoto.files[0])
+        });
+        closeModal();
+        toast("Stok lama berhasil divalidasi dan dicatat.");
+        await renderWarehouse();
+      } catch (err) {
+        toast(err.message || "Gagal menyimpan validasi stok.");
+        btn.disabled = false;
+        btn.textContent = "Simpan Validasi Stok";
+      }
+    };
+  } catch (err) {
+    toast(err.message || "Form validasi stok tidak dapat dibuka.");
+  }
+};
 
 /*************************************************
  * FORM BARANG MASUK GUDANG
