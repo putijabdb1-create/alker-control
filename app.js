@@ -1128,64 +1128,18 @@ async function renderDashboard(){
           <table class="table">
 
             <thead>
-
-              <tr>
-
-                <th>LOKER / LOKASI</th>
-                <th>JUMLAH</th>
-                <th>NILAI</th>
-
-              </tr>
-
+              ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? `
+                <tr><th>NAMA ALKER</th><th>JUMLAH</th><th>DILAPORKAN OLEH</th><th>KONDISI</th><th>LOKER / LOKASI</th><th>NILAI</th></tr>
+              ` : `
+                <tr><th>LOKER / LOKASI</th><th>JUMLAH</th><th>NILAI</th></tr>
+              `}
             </thead>
-
-
             <tbody>
-
-              ${
-                (d.locations || [])
-                  .map(
-                    x => `
-
-                      <tr>
-
-                        <td>
-                          ${esc(
-                            x.name
-                          )}
-                        </td>
-
-                        <td>
-                          ${x.count}
-                        </td>
-
-                        <td>
-                          ${money(
-                            x.value
-                          )}
-                        </td>
-
-                      </tr>
-
-                    `
-                  )
-                  .join("") ||
-
-                `
-                  <tr>
-
-                    <td colspan="3">
-
-                      <div class="empty">
-                        Belum ada inventory.
-                      </div>
-
-                    </td>
-
-                  </tr>
-                `
-              }
-
+              ${String(session.role || "").toUpperCase() === "SPV_GUDANG" ? (
+                (d.inventoryDetails || []).map(x => `<tr><td>${esc(x.itemName || "-")}</td><td>${x.count || 0}</td><td>${esc(x.holder || "-")}</td><td>${badge(x.condition || "-")}</td><td>${esc(x.loker || "-")} / ${esc(x.location || "-")}</td><td>${money(x.value || 0)}</td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">Belum ada inventory.</div></td></tr>`
+              ) : (
+                (d.locations || []).map(x => `<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.value)}</td></tr>`).join("") || `<tr><td colspan="3"><div class="empty">Belum ada inventory.</div></td></tr>`
+              )}
             </tbody>
 
           </table>
@@ -3144,6 +3098,18 @@ window.showInitialForm =
     status.onchange =
       updateInitialMode;
 
+    const initialItemSelect = $("initialForm")?.elements?.itemId;
+    const applyInitialPhotoMode = () => {
+      const selected = items.find(x => String(x.itemId) === String(initialItemSelect?.value));
+      const gallery = String(selected?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("initialPhoto"), $("initialSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    };
+    if (initialItemSelect) initialItemSelect.addEventListener("change", applyInitialPhotoMode);
+    applyInitialPhotoMode();
 
 $("initialForm").onsubmit =
   async e => {
@@ -7057,7 +7023,17 @@ window.showLeaderOwnInventoryForm = async () => {
         brandWrap.innerHTML = `<select name="brand" id="leaderOwnBrand" required><option value="">-- Pilih Merk Splicer --</option>${brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select>`;
       } else brandWrap.innerHTML = `<input name="brand" id="leaderOwnBrand" placeholder="Merk">`;
     }
-    itemSelect.onchange = refreshBrand; refreshBrand();
+    function applyLeaderOwnPhotoMode() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const gallery = String(item?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("leaderOwnPhoto"), $("leaderOwnSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    }
+    itemSelect.onchange = () => { refreshBrand(); applyLeaderOwnPhotoMode(); };
+    refreshBrand(); applyLeaderOwnPhotoMode();
     $("leaderOwnForm").onsubmit = async e => {
       e.preventDefault(); const btn = $("leaderOwnSubmit"); if (btn.disabled) return;
       btn.disabled = true; btn.textContent = "Menyimpan...";
@@ -7072,9 +7048,13 @@ window.showLeaderOwnInventoryForm = async () => {
 };
 
 async function renderLeaderIssues() {
-  const r = await api("issues", { scope: "loker" });
-  const data = r.data || [];
-  $("page").innerHTML = `<div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Laporan rusak/hilang dari teknisi di loker ${esc(session.loker || "-")}. Halaman ini hanya untuk pemantauan laporan, bukan mengubah laporan teknisi.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Teknisi</th><th>ALKER</th><th>Jenis</th><th>Keterangan</th><th>Status</th></tr></thead><tbody>${data.length ? data.map(x=>`<tr><td>${esc(x.date || "-")}</td><td>${esc(x.technician || "-")}</td><td>${esc(x.itemName || "-")}<div class="muted">${esc(x.inventoryId || "")}</div></td><td>${esc(x.issueType || "-")}</td><td>${esc(x.note || "-")}</td><td>${esc(x.status || "-")}</td></tr>`).join("") : `<tr><td colspan="6" class="muted">Belum ada laporan ALKER dari teknisi di loker ini.</td></tr>`}</tbody></table></div>`;
+  const r = await api("inventory", { scope: "loker" });
+  const data = (r.data || []).filter(x => String(x.location || "").toUpperCase() === "TEKNISI");
+  $("page").innerHTML = `
+    <div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Daftar ALKER yang sudah tercatat/dilaporkan oleh teknisi di loker ${esc(session.loker || "-")}.</p></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Nama ALKER</th><th>Nama Teknisi</th><th>Kondisi ALKER</th><th>Loker / Lokasi</th><th>Nilai</th></tr></thead><tbody>
+    ${data.length ? data.map(x => `<tr><td><strong>${esc(x.itemName || "-")}</strong><div class="muted">${esc(x.inventoryId || "")}</div></td><td>${esc(x.holder || x.technician || "-")}</td><td>${badge(x.condition || "BELUM DIKETAHUI")}</td><td>${esc(x.loker || "-")} / ${esc(x.location || "-")}</td><td>${money(x.price || 0)}</td></tr>`).join("") : `<tr><td colspan="5" class="muted">Belum ada ALKER yang dilaporkan/tercatat oleh teknisi di loker ini.</td></tr>`}
+    </tbody></table></div>`;
 }
 
 async function renderTeamInventory() {
@@ -7256,8 +7236,18 @@ window.showLeaderAddInventory = async () => {
       }
     }
 
-    itemSelect.onchange = refreshLeaderBrand;
+    function applyLeaderPhotoMode() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      const gallery = String(item?.photoMode || "CAMERA").toUpperCase() === "GALLERY";
+      [$("leaderPhoto"), $("leaderSerialPhoto")].forEach(input => {
+        if (!input) return;
+        if (gallery) input.removeAttribute("capture");
+        else input.setAttribute("capture", "environment");
+      });
+    }
+    itemSelect.onchange = () => { refreshLeaderBrand(); applyLeaderPhotoMode(); };
     refreshLeaderBrand();
+    applyLeaderPhotoMode();
 
     $("leaderAddInventoryForm").onsubmit = async e => {
       e.preventDefault();
@@ -9996,10 +9986,12 @@ async function renderMaster() {
                     <strong>${esc(x.itemName)}</strong>
                     <small class="muted" style="display:block">${esc(x.category || "-")} · ${esc(x.unit || "UNIT")}</small>
                     <small class="muted" style="display:block">Loker: ${esc(x.lokers || "-")}</small>
+                    <small class="muted" style="display:block">Foto: ${String(x.photoMode || "CAMERA").toUpperCase()==="GALLERY" ? "Galeri diizinkan" : "Kamera saja (prioritas kamera)"}</small>
                     ${badge(String(x.active || "Y").toUpperCase()==="Y" ? "AKTIF" : "NONAKTIF")}
                   </span>
                   ${String(session?.role || "").toUpperCase()==="ADMIN" ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                      <button type="button" class="btn secondary" onclick="editMasterPhotoMode('${esc(x.itemId)}')">Izin Foto</button>
                       <button type="button" class="btn secondary" onclick="editMasterItem('${esc(x.itemId)}')">Edit Loker</button>
                       <button type="button" class="btn ${String(x.active || "Y").toUpperCase()==="Y" ? "danger" : "primary"}" onclick="toggleMasterItem('${esc(x.itemId)}','${String(x.active || "Y").toUpperCase()==="Y" ? "N" : "Y"}')">
                         ${String(x.active || "Y").toUpperCase()==="Y" ? "Nonaktifkan" : "Aktifkan"}
@@ -10069,6 +10061,35 @@ window.editMasterItem = async (itemId) => {
       } catch (err) { toast(err.message || "Loker ALKER gagal diperbarui."); }
     };
   } catch (err) { toast(err.message || "Data ALKER gagal dimuat."); }
+};
+
+window.editMasterPhotoMode = async (itemId) => {
+  try {
+    const r = await api("masters");
+    const item = (r.data?.items || []).find(x => String(x.itemId) === String(itemId));
+    if (!item) throw new Error("Master ALKER tidak ditemukan.");
+    const current = String(item.photoMode || "CAMERA").toUpperCase();
+    openModal("Pengaturan Upload Foto", `
+      <form id="masterPhotoModeForm">
+        <p><strong>${esc(item.itemName)}</strong></p>
+        <p class="muted">Atur pilihan foto pada formulir input ALKER untuk jenis ini.</p>
+        <label class="full-col">Metode Foto
+          <select name="photoMode" required>
+            <option value="GALLERY" ${current === "GALLERY" ? "selected" : ""}>Galeri diizinkan</option>
+            <option value="CAMERA" ${current !== "GALLERY" ? "selected" : ""}>Kamera saja (prioritaskan kamera)</option>
+          </select>
+        </label>
+        <p class="muted">Catatan: pada browser web, pilihan kamera saja memakai atribut kamera browser dan tidak selalu dapat memblokir galeri sepenuhnya.</p>
+        <div class="actions" style="margin-top:15px"><button class="btn primary" type="submit">Simpan Pengaturan</button></div>
+      </form>`);
+    $("masterPhotoModeForm").onsubmit = async e => {
+      e.preventDefault();
+      try {
+        await api("updateMasterPhotoMode", {itemId, photoMode:e.target.photoMode.value});
+        closeModal(); toast("Pengaturan upload foto berhasil disimpan."); await renderMaster();
+      } catch (err) { toast(err.message || "Pengaturan foto gagal disimpan."); }
+    };
+  } catch (err) { toast(err.message || "Gagal membuka pengaturan foto."); }
 };
 
 window.showMasterForm =
@@ -10183,6 +10204,15 @@ window.showMasterForm =
 
 
             <label class="full-col">
+              Izin Upload Foto
+              <select name="photoMode">
+                <option value="CAMERA" selected>Kamera saja (prioritaskan kamera)</option>
+                <option value="GALLERY">Galeri diizinkan</option>
+              </select>
+              <small class="muted">Pilihan kamera mengikuti kemampuan browser/perangkat.</small>
+            </label>
+
+            <label class="full-col">
 
               Merk / Spesifikasi
 
@@ -10256,7 +10286,10 @@ window.showMasterForm =
                 selectedLokers,
 
               spec:
-                f.spec.value
+                f.spec.value,
+
+              photoMode:
+                f.photoMode.value || "CAMERA"
             }
           );
 
