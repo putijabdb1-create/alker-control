@@ -9999,9 +9999,12 @@ async function renderMaster() {
                     ${badge(String(x.active || "Y").toUpperCase()==="Y" ? "AKTIF" : "NONAKTIF")}
                   </span>
                   ${String(session?.role || "").toUpperCase()==="ADMIN" ? `
-                    <button type="button" class="btn ${String(x.active || "Y").toUpperCase()==="Y" ? "danger" : "primary"}" onclick="toggleMasterItem('${esc(x.itemId)}','${String(x.active || "Y").toUpperCase()==="Y" ? "N" : "Y"}')">
-                      ${String(x.active || "Y").toUpperCase()==="Y" ? "Nonaktifkan" : "Aktifkan"}
-                    </button>` : ""}
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                      <button type="button" class="btn secondary" onclick="editMasterItem('${esc(x.itemId)}')">Edit Loker</button>
+                      <button type="button" class="btn ${String(x.active || "Y").toUpperCase()==="Y" ? "danger" : "primary"}" onclick="toggleMasterItem('${esc(x.itemId)}','${String(x.active || "Y").toUpperCase()==="Y" ? "N" : "Y"}')">
+                        ${String(x.active || "Y").toUpperCase()==="Y" ? "Nonaktifkan" : "Aktifkan"}
+                      </button>
+                    </div>` : ""}
                 </div>
               `
             )
@@ -10028,6 +10031,44 @@ window.toggleMasterItem = async (itemId, active) => {
   } catch (err) {
     toast(err.message || "Status ALKER gagal diperbarui.");
   }
+};
+
+window.editMasterItem = async (itemId) => {
+  try {
+    const r = await api("masters");
+    const d = r.data || {};
+    const item = (d.items || []).find(x => String(x.itemId) === String(itemId));
+    if (!item) throw new Error("Master ALKER tidak ditemukan.");
+    const lokers = (d.lokers || []).filter(x => x.name !== "GUDANG");
+    const current = String(item.lokers || "").split("|").map(x => x.trim()).filter(Boolean);
+    openModal("Edit Loker ALKER", `
+      <form id="editMasterLokerForm">
+        <p><strong>${esc(item.itemName)}</strong></p>
+        <p class="muted">Pilih satu atau beberapa loker yang boleh melihat ALKER ini. Perubahan tidak mengubah stok Gudang atau data inventaris yang sudah ada.</p>
+        <div class="form-grid">
+          <label class="full-col">Loker Pengguna
+            <select name="loker" multiple size="${Math.min(Math.max(lokers.length, 3), 7)}" required>
+              ${lokers.map(x => `<option value="${esc(x.name)}" ${current.includes(x.name) ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
+            </select>
+            <small class="muted">Gunakan Ctrl (Windows) atau Command (Mac) untuk memilih lebih dari satu.</small>
+          </label>
+        </div>
+        <div class="actions" style="margin-top:15px">
+          <button class="btn primary" type="submit">Simpan Perubahan</button>
+        </div>
+      </form>`);
+    $("editMasterLokerForm").onsubmit = async e => {
+      e.preventDefault();
+      const selectedLokers = [...e.target.loker.selectedOptions].map(o => o.value);
+      if (!selectedLokers.length) { toast("Pilih minimal satu loker."); return; }
+      try {
+        await api("updateMasterItemLokers", { itemId, lokers: selectedLokers.join("|") });
+        closeModal();
+        toast("Loker ALKER berhasil diperbarui.");
+        await renderMaster();
+      } catch (err) { toast(err.message || "Loker ALKER gagal diperbarui."); }
+    };
+  } catch (err) { toast(err.message || "Data ALKER gagal dimuat."); }
 };
 
 window.showMasterForm =
