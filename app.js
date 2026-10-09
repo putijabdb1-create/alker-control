@@ -544,6 +544,16 @@ function buildNav() {
           "teaminventory",
           "▣",
           "Inventory Loker"
+        ],
+        [
+          "leaderinventory",
+          "▣",
+          "ALKER Leader"
+        ],
+        [
+          "leaderissues",
+          "⚠",
+          "Laporan ALKER Teknisi"
         ]
       ]
     });
@@ -830,6 +840,12 @@ async function route(name) {
 
     if (name === "teaminventory")
       return renderTeamInventory();
+
+    if (name === "leaderinventory")
+      return renderLeaderInventory();
+
+    if (name === "leaderissues")
+      return renderLeaderIssues();
 
     if (name === "warehouse")
       return renderWarehouse();
@@ -6997,6 +7013,70 @@ window.disableTeam = async teamId => {
  * LEADER TEAM
  *************************************************/
 
+async function renderLeaderInventory() {
+  const r = await api("inventory", { scope: "leaderOwn" });
+  const data = r.data || [];
+  $("page").innerHTML = `
+    <div class="page-head">
+      <div>
+        <h2>ALKER Leader</h2>
+        <p class="muted">ALKER yang menjadi tanggung jawab Leader ${esc(session.name || "")}. Data ini terpisah dari Inventory Loker teknisi.</p>
+      </div>
+      <button class="btn primary" onclick="showLeaderOwnInventoryForm()">+ Input ALKER Leader</button>
+    </div>
+    <div id="leaderOwnInventory"></div>`;
+  renderInventoryTable($("leaderOwnInventory"), data, "leaderOwn");
+}
+
+window.showLeaderOwnInventoryForm = async () => {
+  try {
+    const mr = await api("masters");
+    const items = mr.data?.items || [];
+    if (!items.length) { toast("Master ALKER aktif belum tersedia."); return; }
+    openModal("Input ALKER Leader", `
+      <p class="muted">ALKER dicatat atas nama Leader yang sedang login, bukan ke teknisi. Harga otomatis mengikuti Master Harga.</p>
+      <form id="leaderOwnForm">
+        <div class="form-grid">
+          <label>ALKER<select name="itemId" id="leaderOwnItemId" required><option value="">-- Pilih ALKER --</option>${items.map(x=>`<option value="${esc(x.itemId)}">${esc(x.itemName)}</option>`).join("")}</select></label>
+          <label>Merk<div id="leaderOwnBrandWrap"><input name="brand" id="leaderOwnBrand" placeholder="Merk"></div></label>
+          <label>Type / Model<input name="type" placeholder="Type / model"></label>
+          <label>Serial Number<input name="serialNumber" required placeholder="Serial Number"></label>
+          <label>Kondisi<select name="condition" required><option value="BAIK">BAIK</option><option value="RUSAK RINGAN">RUSAK RINGAN</option><option value="RUSAK BERAT">RUSAK BERAT</option></select></label>
+          <label>Foto ALKER<input name="photo" id="leaderOwnPhoto" type="file" accept="image/*" capture="environment" required></label>
+          <label>Foto Serial / Label<input name="serialPhoto" id="leaderOwnSerialPhoto" type="file" accept="image/*" capture="environment"></label>
+          <label class="full-col">Keterangan<textarea name="note" placeholder="Keterangan jika diperlukan..."></textarea></label>
+        </div>
+        <div class="card" style="margin-top:15px"><strong>Harga</strong><div class="muted" style="margin-top:5px">Harga tidak dapat diinput manual dan diambil otomatis dari Master Harga.</div></div>
+        <div class="actions" style="margin-top:15px"><button type="button" class="btn secondary" onclick="closeModal()">Batal</button><button type="submit" class="btn primary" id="leaderOwnSubmit">Simpan ALKER</button></div>
+      </form>`);
+    const itemSelect = $("leaderOwnItemId"), brandWrap = $("leaderOwnBrandWrap");
+    function refreshBrand() {
+      const item = items.find(x => String(x.itemId) === String(itemSelect.value));
+      if (String(item?.itemName || "").trim().toLowerCase() === "splicer") {
+        const brands = ["Sumitomo","Jointwit","Fujikura","INO","ADV","TUMTEC"];
+        brandWrap.innerHTML = `<select name="brand" id="leaderOwnBrand" required><option value="">-- Pilih Merk Splicer --</option>${brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select>`;
+      } else brandWrap.innerHTML = `<input name="brand" id="leaderOwnBrand" placeholder="Merk">`;
+    }
+    itemSelect.onchange = refreshBrand; refreshBrand();
+    $("leaderOwnForm").onsubmit = async e => {
+      e.preventDefault(); const btn = $("leaderOwnSubmit"); if (btn.disabled) return;
+      btn.disabled = true; btn.textContent = "Menyimpan...";
+      try {
+        const fd = new FormData(e.target), photo = $("leaderOwnPhoto")?.files?.[0] || null, serialPhoto = $("leaderOwnSerialPhoto")?.files?.[0] || null;
+        const payload = {itemId:fd.get("itemId"),brand:fd.get("brand")||"",type:fd.get("type")||"",serialNumber:fd.get("serialNumber")||"",condition:fd.get("condition")||"BAIK",note:fd.get("note")||"",photo:photo?await fileToBase64(photo):"",serialPhoto:serialPhoto?await fileToBase64(serialPhoto):""};
+        const result = await api("leaderOwnInventoryAdd", payload);
+        toast(result.data?.message || "ALKER Leader berhasil disimpan."); closeModal(); await renderLeaderInventory();
+      } catch (err) { toast(err.message || "Gagal menyimpan ALKER Leader."); btn.disabled = false; btn.textContent = "Simpan ALKER"; }
+    };
+  } catch (err) { toast(err.message || "Gagal membuka form ALKER Leader."); }
+};
+
+async function renderLeaderIssues() {
+  const r = await api("issues", { scope: "loker" });
+  const data = r.data || [];
+  $("page").innerHTML = `<div class="page-head"><div><h2>Laporan ALKER Teknisi</h2><p class="muted">Laporan rusak/hilang dari teknisi di loker ${esc(session.loker || "-")}. Halaman ini hanya untuk pemantauan laporan, bukan mengubah laporan teknisi.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Tanggal</th><th>Teknisi</th><th>ALKER</th><th>Jenis</th><th>Keterangan</th><th>Status</th></tr></thead><tbody>${data.length ? data.map(x=>`<tr><td>${esc(x.date || "-")}</td><td>${esc(x.technician || "-")}</td><td>${esc(x.itemName || "-")}<div class="muted">${esc(x.inventoryId || "")}</div></td><td>${esc(x.issueType || "-")}</td><td>${esc(x.note || "-")}</td><td>${esc(x.status || "-")}</td></tr>`).join("") : `<tr><td colspan="6" class="muted">Belum ada laporan ALKER dari teknisi di loker ini.</td></tr>`}</tbody></table></div>`;
+}
+
 async function renderTeamInventory() {
 
   const r =
@@ -9848,13 +9928,12 @@ async function renderMaster() {
       </div>
 
 
-      ${session.role === "ADMIN" ? `
       <button
         class="btn primary"
         onclick="showMasterForm()"
       >
         + Tambah ALKER
-      </button>` : ""}
+      </button>
 
     </div>
 
@@ -9906,38 +9985,28 @@ async function renderMaster() {
           (${(d.items || []).length})
         </h3>
 
+        <p class="muted">ALKER master langsung tersedia untuk pilihan pengguna sesuai loker. Tidak perlu masuk Gudang terlebih dahulu.</p>
 
         ${
           (d.items || [])
-            .slice(0, 50)
             .map(
               x => `
-
-                <div class="kpi-line">
-
-                  <span>
-
-                    ${esc(x.itemName)}
-
-                    <small class="muted">
-                      ${esc(x.category)}
-                    </small>
-
+                <div class="kpi-line" style="gap:12px;align-items:center">
+                  <span style="flex:1;min-width:0">
+                    <strong>${esc(x.itemName)}</strong>
+                    <small class="muted" style="display:block">${esc(x.category || "-")} · ${esc(x.unit || "UNIT")}</small>
+                    <small class="muted" style="display:block">Loker: ${esc(x.lokers || "-")}</small>
+                    ${badge(String(x.active || "Y").toUpperCase()==="Y" ? "AKTIF" : "NONAKTIF")}
                   </span>
-
-                  <span>
-                    ${esc(x.lokers || "-")}
-                  </span>
-
+                  ${String(session?.role || "").toUpperCase()==="ADMIN" ? `
+                    <button type="button" class="btn ${String(x.active || "Y").toUpperCase()==="Y" ? "danger" : "primary"}" onclick="toggleMasterItem('${esc(x.itemId)}','${String(x.active || "Y").toUpperCase()==="Y" ? "N" : "Y"}')">
+                      ${String(x.active || "Y").toUpperCase()==="Y" ? "Nonaktifkan" : "Aktifkan"}
+                    </button>` : ""}
                 </div>
-
               `
             )
             .join("") ||
-
-          `<div class="empty">
-            Belum ada master ALKER.
-          </div>`
+          `<div class="empty">Belum ada master ALKER.</div>`
         }
 
       </div>
@@ -9948,6 +10017,18 @@ async function renderMaster() {
   `;
 }
 
+
+window.toggleMasterItem = async (itemId, active) => {
+  const verb = active === "Y" ? "mengaktifkan" : "menonaktifkan";
+  if (!confirm(`Yakin ${verb} ALKER ini?`)) return;
+  try {
+    await api("updateMasterItemStatus", { itemId, active });
+    toast(active === "Y" ? "ALKER berhasil diaktifkan dan tersedia untuk pengguna." : "ALKER dinonaktifkan dari pilihan pengguna.");
+    await renderMaster();
+  } catch (err) {
+    toast(err.message || "Status ALKER gagal diperbarui.");
+  }
+};
 
 window.showMasterForm =
   async () => {
@@ -10142,10 +10223,10 @@ window.showMasterForm =
           closeModal();
 
           toast(
-            "Master ALKER ditambahkan dan langsung tersedia di loker yang dipilih."
+            "Master ALKER ditambahkan."
           );
 
-          cache = {};
+
           renderMaster();
 
         } catch (err) {
