@@ -210,7 +210,22 @@ function toast(msg) {
 }
 
 
+function ensureCompactDetailStyles() {
+  if (document.getElementById("alkerCompactDetailStyles")) return;
+  const style = document.createElement("style");
+  style.id = "alkerCompactDetailStyles";
+  style.textContent = `
+    #modalBody .detail-grid { gap: 7px !important; }
+    #modalBody .detail-box { padding: 8px 10px !important; min-height: 0 !important; border-radius: 9px !important; box-sizing: border-box; }
+    #modalBody .detail-box > span { display: block; font-size: 10px !important; line-height: 1.2 !important; margin-bottom: 4px !important; }
+    #modalBody .detail-box > strong { font-size: 11px !important; line-height: 1.3 !important; }
+    #modalBody .detail-grid + div { margin-top: 10px !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 function openModal(title, html) {
+  ensureCompactDetailStyles();
 
   if (!$("modal")) {
     alert(html.replace(/<[^>]+>/g, ""));
@@ -229,6 +244,23 @@ function closeModal() {
 }
 
 window.closeModal = closeModal;
+
+// Logout otomatis setelah satu jam sejak login, termasuk jika halaman dibiarkan terbuka.
+function checkAlkerSessionExpiry() {
+  const saved = localStorage.getItem("alker_session");
+  if (!saved) return;
+  const startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+  if (startedAt && Date.now() - startedAt >= 60 * 60 * 1000) {
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+    session = null;
+    $("mainView")?.classList.add("hidden");
+    $("loginView")?.classList.remove("hidden");
+    closeModal();
+    if ($("loginMsg")) $("loginMsg").textContent = "Sesi berakhir setelah 1 jam. Silakan login kembali.";
+  }
+}
+setInterval(checkAlkerSessionExpiry, 15000);
 
 
 /*************************************************
@@ -273,6 +305,7 @@ $("loginForm")?.addEventListener(
         "alker_session",
         JSON.stringify(session)
       );
+      localStorage.setItem("alker_session_started_at", String(Date.now()));
 
       await initApp();
 
@@ -293,9 +326,8 @@ $("logoutBtn")?.addEventListener(
   "click",
   () => {
 
-    localStorage.removeItem(
-      "alker_session"
-    );
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
 
     session = null;
 
@@ -331,6 +363,17 @@ $("mobileMenu")?.addEventListener(
 async function initApp() {
 
   if (!session) return;
+
+  const startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+  if (startedAt && Date.now() - startedAt >= 60 * 60 * 1000) {
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
+    session = null;
+    $("mainView")?.classList.add("hidden");
+    $("loginView")?.classList.remove("hidden");
+    toast("Sesi berakhir setelah 1 jam. Silakan login kembali.");
+    return;
+  }
 
   $("loginView")?.classList.add(
     "hidden"
@@ -8246,11 +8289,11 @@ window.showWarehouseStockForm = async () => {
             <textarea name="note" placeholder="Catatan kondisi atau hasil pengecekan"></textarea>
           </label>
         </div>
-        <div class="card" style="margin-top:6px;padding:6px">
+        <div class="card" style="margin-top:12px;padding:12px">
           <strong>Catatan validasi</strong>
           <p class="muted" style="margin:5px 0 0">Harga aset dihitung otomatis dari Master Harga. Unit BAIK dan RUSAK RINGAN dapat disalurkan. Kondisi awal tetap dicatat. Jika quantity lebih dari 1, data dibuat per unit; nomor seri dapat dicatat pada keterangan jika setiap unit berbeda.</p>
         </div>
-        <div class="actions" style="margin-top:10px">
+        <div class="actions" style="margin-top:15px">
           <button type="submit" class="btn primary" id="warehouseStockSaveBtn">Simpan Validasi Stok</button>
         </div>
       </form>`);
@@ -8584,8 +8627,8 @@ window.showReceivingForm =
           <div
             class="card"
             style="
-              margin-top:10px;
-              padding:6px;
+              margin-top:15px;
+              padding:14px;
             "
           >
 
@@ -10903,65 +10946,41 @@ async function renderAudit() {
  *************************************************/
 
 (async () => {
-
   try {
+    const saved = JSON.parse(localStorage.getItem("alker_session") || "null");
+    if (!saved) return;
 
-    const saved =
-      JSON.parse(
-        localStorage.getItem(
-          "alker_session"
-        ) || "null"
-      );
+    let startedAt = Number(localStorage.getItem("alker_session_started_at") || 0);
+    // Existing sessions get a one-hour window starting from their first reload after this update.
+    if (!startedAt || !Number.isFinite(startedAt)) {
+      startedAt = Date.now();
+      localStorage.setItem("alker_session_started_at", String(startedAt));
+    }
 
-
-    if (!saved) {
-
+    if (Date.now() - startedAt >= 60 * 60 * 1000) {
+      localStorage.removeItem("alker_session");
+      localStorage.removeItem("alker_session_started_at");
+      session = null;
       return;
-
     }
 
-
-    session =
-      saved;
-
-
-    /*
-     * Cek session ke server.
-     */
-    const v =
-      await api(
-        "me"
-      );
-
-
-    if (
-      v.ok &&
-      v.data?.session
-    ) {
-
-      session =
-        v.data.session;
-      localStorage.setItem(
-        "alker_session",
-        JSON.stringify(session)
-      );
+    session = saved;
+    const v = await api("me");
+    if (v.ok && v.data?.session) {
+      session = v.data.session;
+      localStorage.setItem("alker_session", JSON.stringify(session));
       await initApp();
+    } else {
+      localStorage.removeItem("alker_session");
+      localStorage.removeItem("alker_session_started_at");
+      session = null;
     }
-
   } catch (e) {
-
-    console.warn(
-      "Session lama tidak valid:",
-      e.message
-    );
-    localStorage.removeItem(
-      "alker_session"
-    );
-
+    console.warn("Session lama tidak valid:", e.message);
+    localStorage.removeItem("alker_session");
+    localStorage.removeItem("alker_session_started_at");
     session = null;
-
   }
-
 })();
 function initialStatusBadge(status){
 
