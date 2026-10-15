@@ -9882,8 +9882,10 @@ async function renderAllInventory() {
 
 
   const all =
-    r.data || [];
+    Array.isArray(r.data) ? r.data : [];
 
+  // Ekspor menggunakan data hasil API yang sudah mengikuti hak akses backend.
+  window.__allInventoryExportData = all;
 
   $("page").innerHTML = `
 
@@ -9900,6 +9902,16 @@ async function renderAllInventory() {
           ALKER / SALKER.
         </p>
 
+      </div>
+
+      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button
+          class="btn"
+          onclick="downloadAllInventoryCsv()"
+          title="Unduh seluruh data inventory yang dapat diakses akun ini"
+        >
+          ↓ Download Excel
+        </button>
       </div>
 
     </div>
@@ -10005,6 +10017,61 @@ async function renderAllInventory() {
 
   draw();
 }
+
+
+// Download CSV yang dapat langsung dibuka dengan Microsoft Excel.
+// Data sumber adalah hasil API inventory sehingga mengikuti cakupan akses role.
+window.downloadAllInventoryCsv = function () {
+  const rows = Array.isArray(window.__allInventoryExportData)
+    ? window.__allInventoryExportData
+    : [];
+
+  if (!rows.length) {
+    toast("Tidak ada data inventory untuk diunduh.");
+    return;
+  }
+
+  const columns = [
+    ["ID Inventory", "inventoryId"],
+    ["ID Item", "itemId"],
+    ["Nama ALKER", "itemName"],
+    ["Kategori", "category"],
+    ["Merk", "brand"],
+    ["Tipe", "type"],
+    ["Serial Number", "serialNumber"],
+    ["Lokasi", "location"],
+    ["Loker", "loker"],
+    ["Pemegang", "holder"],
+    ["ID Pemegang", "holderId"],
+    ["Kondisi", "condition"],
+    ["Status", "status"],
+    ["Nilai (Rp)", "price"],
+    ["Tanggal Diterima", "receivedAt"],
+    ["Tanggal Update", "updatedAt"],
+    ["Sumber", "source"],
+    ["Keterangan", "notes"]
+  ];
+
+  const cell = value => {
+    let text = value === null || value === undefined ? "" : String(value);
+    if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const csv = "\uFEFF" + [
+    columns.map(c => cell(c[0])).join(","),
+    ...rows.map(row => columns.map(c => cell(row[c[1]])).join(","))
+  ].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `Seluruh_Inventory_ALKER_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("Data inventory disiapkan untuk diunduh.");
+};
 
 
 /*************************************************
