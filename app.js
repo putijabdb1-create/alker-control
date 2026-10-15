@@ -9845,6 +9845,19 @@ async function renderAllInventory() {
         placeholder="Cari ID, nama, SN, teknisi..."
       >
 
+      <select id="invSortBy" aria-label="Urutkan inventory">
+        <option value="condition" selected>Urutkan: Kondisi ALKER</option>
+        <option value="itemName">Nama ALKER</option>
+        <option value="holderName">Nama Teknisi</option>
+        <option value="updatedAt">Tanggal Update</option>
+        <option value="serialNumber">Serial Number</option>
+      </select>
+
+      <select id="invSortDirection" aria-label="Arah pengurutan">
+        <option value="desc" selected>Menurun (Z–A / terbaru)</option>
+        <option value="asc">Menaik (A–Z / terlama)</option>
+      </select>
+
     </div>
 
 
@@ -9865,6 +9878,11 @@ async function renderAllInventory() {
         ).toLowerCase();
 
 
+      const sortBy =
+        $("invSortBy")?.value || "condition";
+      const direction =
+        $("invSortDirection")?.value || "desc";
+
       const filtered =
         all.filter(
           x =>
@@ -9873,6 +9891,38 @@ async function renderAllInventory() {
               .includes(q)
         );
 
+      const fieldAliases = {
+        condition: ["condition", "kondisi"],
+        itemName: ["itemName", "namaAlker", "alkerName", "name"],
+        holderName: ["holderName", "technicianName", "namaTeknisi", "holder"],
+        updatedAt: ["updatedAt", "updated_at", "tanggalUpdate", "createdAt", "date"],
+        serialNumber: ["serialNumber", "serial", "sn"]
+      };
+      const getSortValue = item => {
+        const keys = fieldAliases[sortBy] || [sortBy];
+        for (const key of keys) {
+          if (item && item[key] !== undefined && item[key] !== null && item[key] !== "") {
+            return item[key];
+          }
+        }
+        return "";
+      };
+      filtered.sort((a, b) => {
+        const av = getSortValue(a);
+        const bv = getSortValue(b);
+        let result;
+        if (sortBy === "updatedAt") {
+          const at = Date.parse(av) || 0;
+          const bt = Date.parse(bv) || 0;
+          result = at - bt;
+        } else {
+          result = String(av).localeCompare(String(bv), "id", {
+            numeric: true,
+            sensitivity: "base"
+          });
+        }
+        return direction === "desc" ? -result : result;
+      });
 
       renderInventoryTable(
         $("allInv"),
@@ -9882,9 +9932,9 @@ async function renderAllInventory() {
     };
 
 
-  $("invSearch").oninput =
-    draw;
-
+  $("invSearch").oninput = draw;
+  $("invSortBy").onchange = draw;
+  $("invSortDirection").onchange = draw;
 
   draw();
 }
